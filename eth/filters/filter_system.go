@@ -383,7 +383,7 @@ func (es *EventSystem) handleTxsEvent(filters filterIndex, ev core.NewTxsEvent) 
 		txList := make([]*types.TxDetails, 0, len(ev.Txs))
 		for _, tx := range ev.Txs {
 			s := types.NewEIP155Signer(tx.ChainId())
-			txData, e := tx.AsTxDetails(s)
+			txData, e := tx.AsTxDetails(s, es.backend.CurrentBlock().Number())
 			if e == nil {
 				txList = append(txList, &txData)
 			}
