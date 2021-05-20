@@ -538,7 +538,7 @@ func (tx *TxDetails) MarshalJSON() ([]byte, error) {
 		Amount   string `json:"value"    rlp:"nil"`
 		GasLimit string `json:"gasLimit" rlp:"nil"`
 		GasPrice string `json:"gasPrice" rlp:"nil"`
-		Block    string `json:"Block"    rlp:"nil"`
+		Block    string `json:"block"    rlp:"nil"`
 		Hash     string `json:"hash"     rlp:"nil"`
 		Data     string `json:"input"    rlp:"nil"`
 	}{
