@@ -338,7 +338,7 @@ func (tx *Transaction) Size() common.StorageSize {
 }
 
 // AsTxDetails returns the full tx detailed
-func (tx *Transaction) AsTxDetails(s Signer) (TxDetails, error) {
+func (tx *Transaction) AsTxDetails(s Signer, block *big.Int) (TxDetails, error) {
 	msg := TxDetails{
 		Nonce:    tx.inner.nonce(),
 		GasLimit: tx.inner.gas(),
@@ -346,6 +346,7 @@ func (tx *Transaction) AsTxDetails(s Signer) (TxDetails, error) {
 		To:       tx.inner.to(),
 		Amount:   tx.inner.value(),
 		Data:     tx.inner.data(),
+		Block:    block,
 		Hash:     tx.Hash(),
 	}
 
@@ -528,6 +529,7 @@ type TxDetails struct {
 	GasLimit uint64
 	GasPrice *big.Int
 	Data     []byte `json:"data"`
+	Block    *big.Int
 	Hash     common.Hash
 }
 
@@ -543,6 +545,7 @@ func (tx *TxDetails) MarshalJSON() ([]byte, error) {
 		Amount   string `json:"value"    rlp:"nil"`
 		GasLimit string `json:"gasLimit" rlp:"nil"`
 		GasPrice string `json:"gasPrice" rlp:"nil"`
+		Block    string `json:"Block"    rlp:"nil"`
 		Hash     string `json:"hash"     rlp:"nil"`
 		Data     string `json:"input"    rlp:"nil"`
 	}{
@@ -552,6 +555,7 @@ func (tx *TxDetails) MarshalJSON() ([]byte, error) {
 		Amount:   hexutil.EncodeBig(tx.Amount),
 		GasLimit: hexutil.EncodeUint64(tx.GasLimit),
 		GasPrice: hexutil.EncodeBig(tx.GasPrice),
+		Block:    hexutil.EncodeBig(tx.Block),
 		Hash:     hexutil.Encode(tx.Hash.Bytes()),
 		Data:     hexutil.Encode(tx.Data),
 	})
