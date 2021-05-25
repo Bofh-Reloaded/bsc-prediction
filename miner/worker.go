@@ -1024,7 +1024,9 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 // PRD: This is basically a copy of the commitNewWork method
 func (w *worker) PredictBlock() (*types.Block, []*types.Receipt, error) {
 	timestamp := time.Now().Unix()
-	atomic.StoreInt32(interrupt, commitInterruptNone)
+	if (interrupt != nil) {
+		atomic.StoreInt32(interrupt, commitInterruptNone)
+	}
 	interrupt = new(int32)
 
 	w.mu.RLock()
