@@ -130,6 +130,8 @@ type intervalAdjust struct {
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
+	lBlock		*types.Block
+	lReceipts	[]*types.Receipt
 	config      *Config
 	chainConfig *params.ChainConfig
 	engine      consensus.Engine
@@ -339,13 +341,11 @@ func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) t
 	return time.Duration(int64(next))
 }
 
-var interrupt  *int32
-
 // newWorkLoop is a standalone goroutine to submit new mining work upon received events.
 func (w *worker) newWorkLoop(recommit time.Duration) {
 	log.Info("Starting New Work Loop")
 	var (
-		// interrupt   *int32
+		interrupt   *int32
 		minRecommit = recommit // minimal resubmit interval specified by user.
 		timestamp   int64      // timestamp for each round of mining.
 	)
@@ -387,9 +387,9 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(true, commitInterruptNewHead)
 
 		case head := <-w.chainHeadCh:
-			if !w.isRunning() {
-				continue
-			}
+			//if !w.isRunning() {
+			//	continue
+			//}
 			clearPending(head.Block.NumberU64())
 			timestamp = time.Now().Unix()
 			if p, ok := w.engine.(*parlia.Parlia); ok {
@@ -518,6 +518,7 @@ func (w *worker) mainLoop() {
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
 				if tcount != w.current.tcount {
+					// PRD Change
 					// w.updateSnapshot()
 				}
 			} else {
@@ -997,132 +998,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 // PRD: This is basically a copy of the commitNewWork method
 func (w *worker) PredictBlock() (*types.Block, []*types.Receipt, error) {
-	timestamp := time.Now().Unix()
-	if (interrupt != nil) {
-		atomic.StoreInt32(interrupt, commitInterruptNone)
-	}
-	interrupt = new(int32)
-
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-
-	tstart := time.Now()
-	parent := w.chain.CurrentBlock()
-
-	if parent.Time() >= uint64(timestamp) {
-		timestamp = int64(parent.Time() + 1)
-	}
-	num := parent.Number()
-	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     num.Add(num, common.Big1),
-		GasLimit:   core.CalcGasLimit(parent, w.config.GasFloor, w.config.GasCeil),
-		Extra:      w.extra,
-		Time:       uint64(timestamp),
-	}
-	// PRD: This will be false
-	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
-	if w.isRunning() {
-		if w.coinbase == (common.Address{}) {
-			log.Error("Refusing to mine without etherbase")
-			return nil, nil, nil
-		}
-		header.Coinbase = w.coinbase
-	}
-	if err := w.engine.Prepare(w.chain, header); err != nil {
-		log.Error("Failed to prepare header for mining", "err", err)
-		return nil, nil, nil
-	}
-	// If we are care about TheDAO hard-fork check whether to override the extra-data or not
-	if daoBlock := w.chainConfig.DAOForkBlock; daoBlock != nil {
-		// Check whether the block is among the fork extra-override range
-		limit := new(big.Int).Add(daoBlock, params.DAOForkExtraRange)
-		if header.Number.Cmp(daoBlock) >= 0 && header.Number.Cmp(limit) < 0 {
-			// Depending whether we support or oppose the fork, override differently
-			if w.chainConfig.DAOForkSupport {
-				header.Extra = common.CopyBytes(params.DAOForkBlockExtra)
-			} else if bytes.Equal(header.Extra, params.DAOForkBlockExtra) {
-				header.Extra = []byte{} // If miner opposes, don't let it use the reserved extra-data
-			}
-		}
-	}
-	// Could potentially happen if starting to mine in an odd state.
-	err := w.makeCurrent(parent, header)
-	if err != nil {
-		log.Error("Failed to create mining context", "err", err)
-		return nil, nil, nil
-	}
-	// Create the current work task and check any fork transitions needed
-	env := w.current
-	if w.chainConfig.DAOForkSupport && w.chainConfig.DAOForkBlock != nil && w.chainConfig.DAOForkBlock.Cmp(header.Number) == 0 {
-		misc.ApplyDAOHardFork(env.state)
-	}
-	systemcontracts.UpgradeBuildInSystemContract(w.chainConfig, header.Number, env.state)
-	// Accumulate the uncles for the current block
-	uncles := make([]*types.Header, 0, 2)
-	commitUncles := func(blocks map[common.Hash]*types.Block) {
-		// Clean up stale uncle blocks first
-		for hash, uncle := range blocks {
-			if uncle.NumberU64()+staleThreshold <= header.Number.Uint64() {
-				delete(blocks, hash)
-			}
-		}
-		for hash, uncle := range blocks {
-			if len(uncles) == 2 {
-				break
-			}
-			if err := w.commitUncle(env, uncle.Header()); err != nil {
-				log.Trace("Possible uncle rejected", "hash", hash, "reason", err)
-			} else {
-				log.Debug("Committing new uncle to block", "hash", hash)
-				uncles = append(uncles, uncle.Header())
-			}
-		}
-	}
-	// Prefer to locally generated uncle
-	commitUncles(w.localUncles)
-	commitUncles(w.remoteUncles)
-
-	// Create an empty block based on temporary copied state for
-	// sealing in advance without waiting block execution finished.
-
-	// PRD: We always do not want an empty block...
-	//if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
-	//	w.commit(uncles, nil, false, tstart)
-	//}
-
-	// Fill the block with all available pending transactions.
-	pending, err := w.eth.TxPool().Pending()
-	if err != nil {
-		log.Error("Failed to fetch pending transactions", "err", err)
-	}
-	// Short circuit if there is no available pending transactions
-	if len(pending) != 0 {
-		start := time.Now()
-		// Split the pending transactions into locals and remotes
-		localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
-		for _, account := range w.eth.TxPool().Locals() {
-			if txs := remoteTxs[account]; len(txs) > 0 {
-				delete(remoteTxs, account)
-				localTxs[account] = txs
-			}
-		}
-		if len(localTxs) > 0 {
-			txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs)
-			if w.commitTransactions(txs, w.coinbase, interrupt) {
-				return nil, nil, nil
-			}
-		}
-		if len(remoteTxs) > 0 {
-			txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs)
-			if w.commitTransactions(txs, w.coinbase, interrupt) {
-				return nil, nil, nil
-			}
-		}
-		commitTxsTimer.UpdateSince(start)
-		log.Info("Gas pool", "height", header.Number.String(), "pool", w.current.gasPool.String())
-	}
-	return w.commitPrd(uncles, w.fullTaskHook, true, tstart)
+	return w.lBlock, w.lReceipts, nil
 }
 
 // commit runs any post-transaction state modifications, assembles the final block
@@ -1137,6 +1013,9 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
+	log.Info("New block ",block.Number())
+	w.lBlock = block
+	w.lReceipts = receipts
 	if w.isRunning() {
 		if interval != nil {
 			interval()
@@ -1157,19 +1036,6 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 		w.updateSnapshot()
 	}
 	return nil
-}
-
-func (w *worker) commitPrd(uncles []*types.Header, interval func(), update bool, start time.Time) (*types.Block, []*types.Receipt, error) {
-	s := w.current.state.Copy()
-	block, receipts, err := w.engine.FinalizeAndAssemble(w.chain, types.CopyHeader(w.current.header), s, w.current.txs, uncles, w.current.receipts)
-	if err != nil {
-		return nil, nil, err
-	}
-	// PRD: This would give us the possibility to use the pendingBlock (with further changes...)
-	//if update {
-	//	w.updateSnapshot()
-	//}
-	return block, receipts, err
 }
 
 // copyReceipts makes a deep copy of the given receipts.
