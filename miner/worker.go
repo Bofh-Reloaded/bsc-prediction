@@ -995,6 +995,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 func (w *worker) PredictBlock() (*types.Block, []*types.Receipt, error) {
 	timestamp := time.Now().Unix()
 	interrupt := new(int32)
+	atomic.StoreInt32(interrupt, commitInterruptNewHead)
+
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
