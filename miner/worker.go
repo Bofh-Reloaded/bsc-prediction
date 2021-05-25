@@ -390,9 +390,9 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			if (!w.eth.Synced()) {
 				continue
 			}
-			//if !w.isRunning() {
-			//	continue
-			//}
+			if !w.isRunning() {
+				continue
+			}
 			clearPending(head.Block.NumberU64())
 			timestamp = time.Now().Unix()
 			if p, ok := w.engine.(*parlia.Parlia); ok {
