@@ -145,6 +145,11 @@ func (miner *Miner) update() {
 	}
 }
 
+func (miner *Miner) PredictBlock() (*types.Block, []*types.Receipt, error) {
+	return miner.worker.PredictBlock()
+}
+
+
 func (miner *Miner) Start(coinbase common.Address) {
 	miner.startCh <- coinbase
 }
