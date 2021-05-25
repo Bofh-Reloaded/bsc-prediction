@@ -387,12 +387,13 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(true, commitInterruptNewHead)
 
 		case head := <-w.chainHeadCh:
-			if (!w.eth.Synced()) {
+			progress := w.eth.Downloader().Progress()
+			if progress.CurrentBlock < progress.HighestBlock {
 				continue
 			}
-			if !w.isRunning() {
+/*			if !w.isRunning() {
 				continue
-			}
+			}*/
 			clearPending(head.Block.NumberU64())
 			timestamp = time.Now().Unix()
 			if p, ok := w.engine.(*parlia.Parlia); ok {
