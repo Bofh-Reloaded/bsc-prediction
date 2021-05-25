@@ -339,13 +339,13 @@ func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) t
 	return time.Duration(int64(next))
 }
 
-//var interrupt  *int32
+var interrupt  *int32
 
 // newWorkLoop is a standalone goroutine to submit new mining work upon received events.
 func (w *worker) newWorkLoop(recommit time.Duration) {
 	log.Info("Starting New Work Loop")
 	var (
-		interrupt   *int32
+		// interrupt   *int32
 		minRecommit = recommit // minimal resubmit interval specified by user.
 		timestamp   int64      // timestamp for each round of mining.
 	)
@@ -998,8 +998,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 // PRD: This is basically a copy of the commitNewWork method
 func (w *worker) PredictBlock() (*types.Block, []*types.Receipt, error) {
 	timestamp := time.Now().Unix()
-	interrupt := new(int32)
 	atomic.StoreInt32(interrupt, commitInterruptNone)
+	interrupt = new(int32)
 
 	w.mu.RLock()
 	defer w.mu.RUnlock()
