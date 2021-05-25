@@ -387,6 +387,9 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(true, commitInterruptNewHead)
 
 		case head := <-w.chainHeadCh:
+			if (!w.eth.Synced()) {
+				continue
+			}
 			//if !w.isRunning() {
 			//	continue
 			//}
