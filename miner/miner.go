@@ -38,6 +38,7 @@ import (
 type Backend interface {
 	BlockChain() *core.BlockChain
 	TxPool() *core.TxPool
+	Synced() bool
 }
 
 // Config is the configuration parameters of mining.
