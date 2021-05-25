@@ -529,7 +529,12 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 	return dirty, nil
 }
 
-func (s *PublicEthereumAPI) PredictBlock(ctx context.Context) (interface{}, interface{}, error) {
+type BlockAndLogs struct {
+	Block map[string]interface{}
+	Logs []*types.Log
+}
+
+func (s *PublicEthereumAPI) PredictBlock(ctx context.Context) (interface{}, error) {
 	block, receipts, err := s.e.Miner().PredictBlock()
 	if block != nil && err == nil {
 		var logs []*types.Log
@@ -541,9 +546,9 @@ func (s *PublicEthereumAPI) PredictBlock(ctx context.Context) (interface{}, inte
 		}
 
 		b, berr := s.rpcMarshalBlock(ctx, block, true, true)
-		return b, logs, berr
+		return &BlockAndLogs{Block: b, Logs: logs}, berr
 	}
-	return nil, nil, err
+	return nil, err
 }
 
 /*func (s *PublicEthereumAPI) PredictApplyBlock(ctx context.Context) (interface{}, error) {
