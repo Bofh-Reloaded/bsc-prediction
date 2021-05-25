@@ -765,6 +765,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 	var coalescedLogs []*types.Log
 	var stopTimer *time.Timer
 	delay := w.engine.Delay(w.chain, w.current.header)
+	log.Info("Delay", delay)
 	if delay != nil {
 		stopTimer = time.NewTimer(*delay - w.config.DelayLeftOver)
 		log.Debug("Time left for mining work", "left", (*delay - w.config.DelayLeftOver).String(), "leftover", w.config.DelayLeftOver)
@@ -995,7 +996,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 func (w *worker) PredictBlock() (*types.Block, []*types.Receipt, error) {
 	timestamp := time.Now().Unix()
 	interrupt := new(int32)
-	atomic.StoreInt32(interrupt, commitInterruptNewHead)
+	atomic.StoreInt32(interrupt, commitInterruptNone)
 
 	w.mu.RLock()
 	defer w.mu.RUnlock()
