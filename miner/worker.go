@@ -339,8 +339,11 @@ func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) t
 	return time.Duration(int64(next))
 }
 
+//var interrupt  *int32
+
 // newWorkLoop is a standalone goroutine to submit new mining work upon received events.
 func (w *worker) newWorkLoop(recommit time.Duration) {
+	log.Info("Starting New Work Loop")
 	var (
 		interrupt   *int32
 		minRecommit = recommit // minimal resubmit interval specified by user.
@@ -515,7 +518,7 @@ func (w *worker) mainLoop() {
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
 				if tcount != w.current.tcount {
-					w.updateSnapshot()
+					// w.updateSnapshot()
 				}
 			} else {
 				// Special case, if the consensus engine is 0 period clique(dev mode),
