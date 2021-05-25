@@ -130,8 +130,8 @@ type intervalAdjust struct {
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
-	lBlock		*types.Block
-	lReceipts	[]*types.Receipt
+	lBlock      *types.Block
+	lReceipts   []*types.Receipt
 	config      *Config
 	chainConfig *params.ChainConfig
 	engine      consensus.Engine
@@ -391,9 +391,9 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			if progress.CurrentBlock < progress.HighestBlock {
 				continue
 			}
-/*			if !w.isRunning() {
-				continue
-			}*/
+			/*			if !w.isRunning() {
+						continue
+					}*/
 			clearPending(head.Block.NumberU64())
 			timestamp = time.Now().Unix()
 			if p, ok := w.engine.(*parlia.Parlia); ok {
@@ -1012,10 +1012,11 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
-	log.Info("New block ",block.Number())
+	log.Info("New block ", block.Number())
 	w.lBlock = block
 	w.lReceipts = receipts
-	if w.isRunning() {
+	// PRD to be safe that we are not sending it anywhere...
+	/*if w.isRunning() {
 		if interval != nil {
 			interval()
 		}
@@ -1030,7 +1031,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 		case <-w.exitCh:
 			log.Info("Worker has exited")
 		}
-	}
+	}*/
 	if update {
 		w.updateSnapshot()
 	}
