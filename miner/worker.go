@@ -773,7 +773,6 @@ func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coin
 	var coalescedLogs []*types.Log
 	var stopTimer *time.Timer
 	delay := w.engine.Delay(w.chain, w.current.header)
-	log.Info("Delay", delay)
 	if delay != nil {
 		stopTimer = time.NewTimer(*delay - w.config.DelayLeftOver)
 		log.Debug("Time left for mining work", "left", (*delay - w.config.DelayLeftOver).String(), "leftover", w.config.DelayLeftOver)
@@ -1017,7 +1016,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
-	log.Info("New block ", block.Number())
+	log.Info("New block minted ", "blockNumber", block.Number())
 	w.lBlock = block
 	w.lReceipts = receipts
 	// PRD to be safe that we are not sending it anywhere...
