@@ -534,6 +534,11 @@ type BlockAndLogs struct {
 	Logs []*types.Log
 }
 
+type PredictedLogs struct {
+	BlockNumber uint64
+	Logs []*types.Log
+}
+
 func (s *PublicEthereumAPI) PredictBlock(ctx context.Context) (interface{}, error) {
 	block, receipts, err := s.e.Miner().PredictBlock()
 	if block != nil && err == nil {
@@ -551,21 +556,23 @@ func (s *PublicEthereumAPI) PredictBlock(ctx context.Context) (interface{}, erro
 	return nil, err
 }
 
-/*func (s *PublicEthereumAPI) PredictApplyBlock(ctx context.Context) (interface{}, error) {
-	block, _, err := s.e.Miner().PredictBlock()
-	if err != nil {
-		return nil, err
+func (s *PublicEthereumAPI) PredictLogs(ctx context.Context, hash common.Hash) (interface{}, error) {
+	block, receipts, err := s.e.Miner().PredictBlock()
+	if block != nil && err == nil {
+		bhash := block.Hash()
+		var logs []*types.Log
+		for _, receipt := range receipts {
+			for _, log := range receipt.Logs {
+				log.BlockHash = bhash
+				if (log.Topics[0] == hash) {
+					logs = append(logs, log)
+				}
+			}
+		}
+		return &PredictedLogs{BlockNumber: block.NumberU64(), Logs: logs}, nil
 	}
-
-	// Apply simulating the block came from the "canonical" chain
-	blocks := make([]*types.Block, 1)
-	blocks[0] = block
-	_, berr := s.e.blockchain.InsertChain(blocks)
-	if berr != nil {
-		return nil, berr
-	}
-	return s.rpcMarshalBlock(ctx, block, true, true)
-}*/
+	return nil, err
+}
 
 func (s *PublicEthereumAPI) rpcMarshalBlock(ctx context.Context, b *types.Block, inclTx bool, fullTx bool) (map[string]interface{}, error) {
 	fields, err := ethapi.RPCMarshalBlock(b, inclTx, fullTx)
