@@ -391,9 +391,10 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			if progress.CurrentBlock < progress.HighestBlock {
 				continue
 			}
-			/*			if !w.isRunning() {
-						continue
-					}*/
+			/*if !w.isRunning() {
+				continue
+			}*/
+			time.Sleep(20 * time.Millisecond)
 			clearPending(head.Block.NumberU64())
 			timestamp = time.Now().Unix()
 			if p, ok := w.engine.(*parlia.Parlia); ok {
