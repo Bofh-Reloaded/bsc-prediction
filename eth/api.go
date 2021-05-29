@@ -98,7 +98,7 @@ func (api *PublicMinerAPI) SetMaxDelta(mul int) error {
 	return nil
 }
 
-func (api *PublicMinerAPI) GetMaxDelta(mul int) (uint64, error) {
+func (api *PublicMinerAPI) GetMaxDelta() (uint64, error) {
 	return api.e.miner.GetMaxDelta(), nil
 }
 
