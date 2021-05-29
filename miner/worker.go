@@ -824,7 +824,7 @@ LOOP:
 		if stopTimer != nil {
 			select {
 			case <-stopTimer.C:
-				log.Info("Not enough time for further transactions", "txs", len(w.current.txs))
+				// log.Info("Not enough time for further transactions", "txs", len(w.current.txs))
 				break LOOP
 			default:
 			}
