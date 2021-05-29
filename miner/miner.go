@@ -83,8 +83,12 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 	return miner
 }
 
-func (miner *Miner) MaxDelta(max int) {
+func (miner *Miner) SetMaxDelta(max int) {
 	miner.worker.maxDelta = uint64(max)
+}
+
+func (miner *Miner) GetMaxDelta() uint64 {
+	return miner.worker.maxDelta
 }
 
 // update keeps track of the downloader events. Please be aware that this is a one shot type of update loop.
