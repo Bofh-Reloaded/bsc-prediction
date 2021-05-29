@@ -93,12 +93,12 @@ func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 	return &PrivateMinerAPI{e: e}
 }
 
-func (api *PrivateMinerAPI) SetMaxDelta(mul int) error {
+func (api *PublicMinerAPI) SetMaxDelta(mul int) error {
 	api.e.miner.SetMaxDelta(mul)
 	return nil
 }
 
-func (api *PrivateMinerAPI) GetMaxDelta(mul int) (uint64, error) {
+func (api *PublicMinerAPI) GetMaxDelta(mul int) (uint64, error) {
 	return api.e.miner.GetMaxDelta(), nil
 }
 
