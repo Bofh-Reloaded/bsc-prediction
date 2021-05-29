@@ -519,7 +519,7 @@ func (w *worker) mainLoop() {
 				}
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs)
 				tcount := w.current.tcount
-				w.commitTransactions(txset, coinbase, nil)
+				w.commitTransactions(txset, coinbase, nil, 0)
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
 				if tcount != w.current.tcount {
@@ -759,7 +759,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	return receipt.Logs, nil
 }
 
-func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32) bool {
+func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32, maxTrxs int) bool {
 	// Short circuit if current is nil
 	if w.current == nil {
 		return true
@@ -811,6 +811,10 @@ LOOP:
 		// If we don't have enough gas for any further transactions then we're done
 		if w.current.gasPool.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "have", w.current.gasPool, "want", params.TxGas)
+			break
+		}
+		if maxTrxs > 0 && len(w.current.txs) >= maxTrxs {
+			// log.Trace("Reached max trxs", "maxTrxs", maxTrxs)
 			break
 		}
 		if stopTimer != nil {
@@ -970,6 +974,9 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	if err != nil {
 		log.Error("Failed to fetch pending transactions", "err", err)
 	}
+
+	maxTrxs := parent.Transactions().Len() * 125 / 100
+
 	// Short circuit if there is no available pending transactions
 	if len(pending) != 0 {
 		start := time.Now()
@@ -983,13 +990,13 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		}
 		if len(localTxs) > 0 {
 			txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs)
-			if w.commitTransactions(txs, w.coinbase, interrupt) {
+			if w.commitTransactions(txs, w.coinbase, interrupt, maxTrxs) {
 				return
 			}
 		}
 		if len(remoteTxs) > 0 {
 			txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs)
-			if w.commitTransactions(txs, w.coinbase, interrupt) {
+			if w.commitTransactions(txs, w.coinbase, interrupt, maxTrxs) {
 				return
 			}
 		}
