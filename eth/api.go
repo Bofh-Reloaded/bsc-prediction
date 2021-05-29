@@ -93,6 +93,12 @@ func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 	return &PrivateMinerAPI{e: e}
 }
 
+func (api *PrivateMinerAPI) MaxDelta(mul int) error {
+	api.e.miner.MaxDelta(mul)
+	return nil
+}
+
+
 // Start starts the miner with the given number of threads. If threads is nil,
 // the number of workers started is equal to the number of logical CPUs that are
 // usable by this process. If mining is already running, this method adjust the

@@ -130,6 +130,7 @@ type intervalAdjust struct {
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
+	maxDelta	uint64
 	lBlock      *types.Block
 	lReceipts   []*types.Receipt
 	config      *Config
@@ -198,6 +199,7 @@ type worker struct {
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
+		maxDelta: 			125,
 		config:             config,
 		chainConfig:        chainConfig,
 		engine:             engine,
@@ -975,7 +977,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		log.Error("Failed to fetch pending transactions", "err", err)
 	}
 
-	maxGas := parent.Header().GasUsed * 125 / 100
+	maxGas := parent.Header().GasUsed * w.maxDelta / 100
 
 	// Short circuit if there is no available pending transactions
 	if len(pending) != 0 {
