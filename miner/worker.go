@@ -994,7 +994,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 			}
 		}
 		commitTxsTimer.UpdateSince(start)
-		log.Info("Gas pool", "height", header.Number.String(), "pool", w.current.gasPool.String())
+		// log.Info("Gas pool", "height", header.Number.String(), "pool", w.current.gasPool.String())
 	}
 	w.commit(uncles, w.fullTaskHook, false, tstart)
 }
@@ -1012,7 +1012,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
-	log.Info("New block minted ", "blockNumber", block.Number())
+	log.Info("New block minted ", "blockNumber", block.Number(),"trxs",block.Transactions().Len(),"gas",block.GasUsed())
 	w.lBlock = block
 	w.lReceipts = receipts
 	// PRD to be safe that we are not sending it anywhere...
