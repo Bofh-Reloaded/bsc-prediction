@@ -759,7 +759,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	return receipt.Logs, nil
 }
 
-func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32, maxTrxs int) bool {
+func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32, maxGas uint64) bool {
 	// Short circuit if current is nil
 	if w.current == nil {
 		return true
@@ -813,7 +813,7 @@ LOOP:
 			log.Trace("Not enough gas for further transactions", "have", w.current.gasPool, "want", params.TxGas)
 			break
 		}
-		if maxTrxs > 0 && len(w.current.txs) >= maxTrxs {
+		if maxGas > 0 && w.current.header.GasUsed > maxGas {
 			// log.Trace("Reached max trxs", "maxTrxs", maxTrxs)
 			break
 		}
@@ -975,7 +975,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		log.Error("Failed to fetch pending transactions", "err", err)
 	}
 
-	maxTrxs := parent.Transactions().Len() * 125 / 100
+	maxGas := parent.Header().GasUsed * 125 / 100
 
 	// Short circuit if there is no available pending transactions
 	if len(pending) != 0 {
@@ -990,13 +990,13 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		}
 		if len(localTxs) > 0 {
 			txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs)
-			if w.commitTransactions(txs, w.coinbase, interrupt, maxTrxs) {
+			if w.commitTransactions(txs, w.coinbase, interrupt, maxGas) {
 				return
 			}
 		}
 		if len(remoteTxs) > 0 {
 			txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs)
-			if w.commitTransactions(txs, w.coinbase, interrupt, maxTrxs) {
+			if w.commitTransactions(txs, w.coinbase, interrupt, maxGas) {
 				return
 			}
 		}
