@@ -895,6 +895,12 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	return errs
 }
 
+func (pool *TxPool) EnsurePromotionDone() {
+	dirty := newAccountSet(pool.signer)
+	done := pool.requestPromoteExecutables(dirty)
+	<-done
+}
+
 // addTxsLocked attempts to queue a batch of transactions if they are valid.
 // The transaction pool lock must be held.
 func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) ([]error, *accountSet) {
