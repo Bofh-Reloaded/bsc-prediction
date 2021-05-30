@@ -130,6 +130,7 @@ type intervalAdjust struct {
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
+	pDelay		time.Duration
 	maxDelta	uint64
 	lBlock      *types.Block
 	lReceipts   []*types.Receipt
@@ -396,6 +397,9 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			/*if !w.isRunning() {
 				continue
 			}*/
+			if (w.pDelay > 0) {
+				time.Sleep(w.pDelay * time.Millisecond)
+			}
 			//time.Sleep(20 * time.Millisecond)
 			w.eth.TxPool().EnsurePromotionDone()
 			clearPending(head.Block.NumberU64())
