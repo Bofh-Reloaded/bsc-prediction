@@ -199,7 +199,7 @@ type worker struct {
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
-		maxDelta: 			125,
+		maxDelta: 			0,
 		config:             config,
 		chainConfig:        chainConfig,
 		engine:             engine,
