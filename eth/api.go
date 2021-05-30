@@ -93,13 +93,22 @@ func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 	return &PrivateMinerAPI{e: e}
 }
 
-func (api *PublicMinerAPI) SetMaxDelta(mul int) error {
-	api.e.miner.SetMaxDelta(mul)
+func (api *PublicMinerAPI) SetMaxDelta(maxDelta int) error {
+	api.e.miner.SetMaxDelta(maxDelta)
 	return nil
 }
 
 func (api *PublicMinerAPI) GetMaxDelta() (uint64, error) {
 	return api.e.miner.GetMaxDelta(), nil
+}
+
+func (api *PublicMinerAPI) SetPredictionDelay(delay int) error {
+	api.e.miner.SetPredictionDelay(delay)
+	return nil
+}
+
+func (api *PublicMinerAPI) GetPredictionDelay() (time.Duration, error) {
+	return api.e.miner.GetPredictionDelay(), nil
 }
 
 // Start starts the miner with the given number of threads. If threads is nil,
