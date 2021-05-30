@@ -396,7 +396,8 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			/*if !w.isRunning() {
 				continue
 			}*/
-			time.Sleep(20 * time.Millisecond)
+			//time.Sleep(20 * time.Millisecond)
+			w.eth.TxPool().EnsurePromotionDone()
 			clearPending(head.Block.NumberU64())
 			timestamp = time.Now().Unix()
 			commit(true, commitInterruptNewHead)
