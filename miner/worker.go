@@ -869,6 +869,7 @@ LOOP:
 
 		if ignore[tx.Hash()] {
 			// Ignore trx
+			txs.Pop()
 			continue
 		}
 
@@ -1058,7 +1059,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 	if w.predConfig.P2Enabled && w.predData.step == 1 {
 		if w.predConfig.P2Delay > 0 {
-			t := w.predConfig.P2Delay * time.Millisecond - time.Duration(time.Now().Unix() - timestamp) * 1000 * time.Millisecond
+			tx := w.predConfig.P2Delay * time.Millisecond - time.Duration(time.Now().Unix() - timestamp) * 1000 * time.Millisecond
+			t := time.Duration(minVal(int64(tx), int64(w.predConfig.P2Delay)))
 			log.Info("Predict T+2","sleep",t)
 			if (t > 0) {
 				time.Sleep(t)
@@ -1068,6 +1070,13 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		timestamp = time.Now().Unix()
 		w.commitNewWork(interrupt, noempty, time.Now().Unix())
 	}
+}
+
+func minVal(x, y int64) int64 {
+ if x < y {
+   return x
+ }
+ return y
 }
 
 // PRD: This is basically a copy of the commitNewWork method
