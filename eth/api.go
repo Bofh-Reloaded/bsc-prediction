@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/miner"
 	"io"
 	"math/big"
 	"os"
@@ -93,22 +94,19 @@ func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 	return &PrivateMinerAPI{e: e}
 }
 
-func (api *PublicMinerAPI) SetMaxDelta(maxDelta int) error {
-	api.e.miner.SetMaxDelta(maxDelta)
-	return nil
+func (api *PublicMinerAPI) SetPredictionConfig(p1Enabled bool, p1Delay int, p2Enabled bool, p2Delay int, maxDelta int) (*miner.PredictionConfig, error) {
+	api.e.miner.SetPredictionConfig(&miner.PredictionConfig{
+		P1Enabled: p1Enabled,
+		P2Enabled: p2Enabled,
+		MaxDelta: uint64(maxDelta),
+		P1Delay: time.Duration(p1Delay),
+		P2Delay: time.Duration(p2Delay),
+	})
+	return api.GetPredictionConfig()
 }
 
-func (api *PublicMinerAPI) GetMaxDelta() (uint64, error) {
-	return api.e.miner.GetMaxDelta(), nil
-}
-
-func (api *PublicMinerAPI) SetPredictionDelay(delay int) error {
-	api.e.miner.SetPredictionDelay(delay)
-	return nil
-}
-
-func (api *PublicMinerAPI) GetPredictionDelay() (time.Duration, error) {
-	return api.e.miner.GetPredictionDelay(), nil
+func (api *PublicMinerAPI) GetPredictionConfig() (*miner.PredictionConfig, error) {
+	return api.e.miner.GetPredictionConfig(), nil
 }
 
 // Start starts the miner with the given number of threads. If threads is nil,
@@ -557,8 +555,8 @@ type PredictedLogs struct {
 	Logs []*types.Log
 }
 
-func (s *PublicEthereumAPI) PredictBlock(ctx context.Context) (interface{}, error) {
-	block, receipts, err := s.e.Miner().PredictBlock()
+func (s *PublicEthereumAPI) PredictBlock(ctx context.Context, step int) (interface{}, error) {
+	block, receipts, err := s.e.Miner().PredictBlock(step)
 	if block != nil && err == nil {
 		var logs []*types.Log
 		for _, receipt := range receipts {
@@ -574,8 +572,8 @@ func (s *PublicEthereumAPI) PredictBlock(ctx context.Context) (interface{}, erro
 	return nil, err
 }
 
-func (s *PublicEthereumAPI) PredictLogs(ctx context.Context, hash common.Hash) (interface{}, error) {
-	block, receipts, err := s.e.Miner().PredictBlock()
+func (s *PublicEthereumAPI) PredictLogs(ctx context.Context, step int, hash common.Hash) (interface{}, error) {
+	block, receipts, err := s.e.Miner().PredictBlock(step)
 	if block != nil && err == nil {
 		bhash := block.Hash()
 		var logs []*types.Log
