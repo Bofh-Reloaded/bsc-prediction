@@ -83,20 +83,12 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 	return miner
 }
 
-func (miner *Miner) SetMaxDelta(max int) {
-	miner.worker.maxDelta = uint64(max)
+func (miner *Miner) SetPredictionConfig(cfg *PredictionConfig) {
+	miner.worker.predConfig = cfg
 }
 
-func (miner *Miner) GetMaxDelta() uint64 {
-	return miner.worker.maxDelta
-}
-
-func (miner *Miner) SetPredictionDelay(max int) {
-	miner.worker.pDelay = time.Duration(max)
-}
-
-func (miner *Miner) GetPredictionDelay() time.Duration {
-	return miner.worker.pDelay
+func (miner *Miner) GetPredictionConfig() *PredictionConfig {
+	return miner.worker.predConfig
 }
 
 // update keeps track of the downloader events. Please be aware that this is a one shot type of update loop.
@@ -163,8 +155,8 @@ func (miner *Miner) update() {
 	}
 }
 
-func (miner *Miner) PredictBlock() (*types.Block, []*types.Receipt, error) {
-	return miner.worker.PredictBlock()
+func (miner *Miner) PredictBlock(step int) (*types.Block, []*types.Receipt, error) {
+	return miner.worker.PredictBlock(step)
 }
 
 

@@ -127,13 +127,27 @@ type intervalAdjust struct {
 	inc   bool
 }
 
+type PredictionConfig struct {
+	P1Enabled  bool `json:"p1Enabled"`
+	P1Delay    time.Duration `json:"p1Delay"`
+	P2Enabled bool `json:"p2Enabled"`
+	P2Delay   time.Duration `json:"p2Delay"`
+	MaxDelta  uint64 `json:"maxDelta"`
+}
+
+type PredictionData struct {
+	step      int
+	pBlock     *types.Block
+	pReceipts  []*types.Receipt
+	p2Block    *types.Block
+	p2Receipts []*types.Receipt
+}
+
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
-	pDelay		time.Duration
-	maxDelta	uint64
-	lBlock      *types.Block
-	lReceipts   []*types.Receipt
+	predData	*PredictionData
+	predConfig  *PredictionConfig
 	config      *Config
 	chainConfig *params.ChainConfig
 	engine      consensus.Engine
@@ -200,7 +214,8 @@ type worker struct {
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
-		maxDelta: 			0,
+		predData: 			&PredictionData{step:0},
+		predConfig:         &PredictionConfig{P1Enabled: true, P2Enabled: true, MaxDelta: 0, P1Delay: 20, P2Delay: 1200},
 		config:             config,
 		chainConfig:        chainConfig,
 		engine:             engine,
@@ -397,10 +412,14 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			/*if !w.isRunning() {
 				continue
 			}*/
-			if (w.pDelay > 0) {
-				time.Sleep(w.pDelay * time.Millisecond)
+			if !w.predConfig.P1Enabled {
+				continue
 			}
-			//time.Sleep(20 * time.Millisecond)
+
+			if w.predConfig.P1Delay > 0 {
+				time.Sleep(w.predConfig.P1Delay * time.Millisecond)
+			}
+			w.predData.step = 1
 			w.eth.TxPool().EnsurePromotionDone()
 			clearPending(head.Block.NumberU64())
 			timestamp = time.Now().Unix()
@@ -416,6 +435,16 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 				}
 			}
 			commit(true, commitInterruptNewHead)
+
+			if w.predConfig.P2Enabled {
+				if w.predConfig.P2Delay > 0 {
+					time.Sleep(w.predConfig.P2Delay * time.Millisecond)
+				}
+				w.predData.step = 2
+				timestamp = time.Now().Unix()
+				commit(true, commitInterruptNewHead)
+			}
+
 
 		case <-timer.C:
 			// If mining is running resubmit a new work cycle periodically to pull in
@@ -471,6 +500,7 @@ func (w *worker) mainLoop() {
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
 	defer w.chainSideSub.Unsubscribe()
+	m := make(map[common.Hash]bool, 0)
 
 	for {
 		select {
@@ -526,7 +556,7 @@ func (w *worker) mainLoop() {
 				}
 				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs)
 				tcount := w.current.tcount
-				w.commitTransactions(txset, coinbase, nil, 0)
+				w.commitTransactions(txset, coinbase, nil, 0, m)
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
 				if tcount != w.current.tcount {
@@ -766,7 +796,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	return receipt.Logs, nil
 }
 
-func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32, maxGas uint64) bool {
+func (w *worker) commitTransactions(txs *types.TransactionsByPriceAndNonce, coinbase common.Address, interrupt *int32, maxGas uint64, ignore map[common.Hash]bool) bool {
 	// Short circuit if current is nil
 	if w.current == nil {
 		return true
@@ -837,6 +867,12 @@ LOOP:
 		if tx == nil {
 			break
 		}
+
+		if ignore[tx.Hash()] {
+			// Ignore trx
+			continue
+		}
+
 		// Error may be ignored here. The error has already been checked
 		// during transaction acceptance is the transaction pool.
 		//
@@ -982,7 +1018,15 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		log.Error("Failed to fetch pending transactions", "err", err)
 	}
 
-	maxGas := parent.Header().GasUsed * w.maxDelta / 100
+	maxGas := parent.Header().GasUsed * w.predConfig.MaxDelta / 100
+
+	m := make(map[common.Hash]bool, 0)
+	if w.predData.step > 1 {
+		m = make(map[common.Hash]bool, w.predData.pBlock.Transactions().Len())
+		for _, p := range w.predData.pBlock.Transactions() {
+			m[p.Hash()] = true
+		}
+	}
 
 	// Short circuit if there is no available pending transactions
 	if len(pending) != 0 {
@@ -997,13 +1041,13 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		}
 		if len(localTxs) > 0 {
 			txs := types.NewTransactionsByPriceAndNonce(w.current.signer, localTxs)
-			if w.commitTransactions(txs, w.coinbase, interrupt, maxGas) {
+			if w.commitTransactions(txs, w.coinbase, interrupt, maxGas, m) {
 				return
 			}
 		}
 		if len(remoteTxs) > 0 {
 			txs := types.NewTransactionsByPriceAndNonce(w.current.signer, remoteTxs)
-			if w.commitTransactions(txs, w.coinbase, interrupt, maxGas) {
+			if w.commitTransactions(txs, w.coinbase, interrupt, maxGas, m) {
 				return
 			}
 		}
@@ -1014,8 +1058,13 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 }
 
 // PRD: This is basically a copy of the commitNewWork method
-func (w *worker) PredictBlock() (*types.Block, []*types.Receipt, error) {
-	return w.lBlock, w.lReceipts, nil
+func (w *worker) PredictBlock(step int) (*types.Block, []*types.Receipt, error) {
+	if (step == 1) {
+		return w.predData.pBlock, w.predData.pReceipts, nil
+	} else if (step == 2) {
+		return w.predData.p2Block, w.predData.p2Receipts, nil
+	}
+	return nil, nil, nil
 }
 
 // commit runs any post-transaction state modifications, assembles the final block
@@ -1026,9 +1075,14 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
-	log.Info("New block minted ", "blockNumber", block.Number(),"trxs",block.Transactions().Len(),"gas",block.GasUsed())
-	w.lBlock = block
-	w.lReceipts = receipts
+	log.Info("New block minted ", "blockNumber", block.Number(), "trxs", block.Transactions().Len(), "gas", block.GasUsed())
+	if w.predData.step == 1 {
+		w.predData.pBlock = block
+		w.predData.pReceipts = receipts
+	} else if w.predData.step == 2 {
+		w.predData.p2Block = block
+		w.predData.p2Receipts = receipts
+	}
 	// PRD to be safe that we are not sending it anywhere...
 	/*if w.isRunning() {
 		if interval != nil {
