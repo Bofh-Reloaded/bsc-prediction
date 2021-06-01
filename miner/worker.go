@@ -1060,7 +1060,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	if w.predConfig.P2Enabled && w.predData.step == 1 {
 		if w.predConfig.P2Delay > 0 {
 			tx := w.predConfig.P2Delay * time.Millisecond - time.Duration(time.Now().Unix() - timestamp) * 1000 * time.Millisecond
-			t := time.Duration(minVal(int64(tx), int64(w.predConfig.P2Delay)))
+			t := time.Duration(minVal(int64(tx), int64(w.predConfig.P2Delay * time.Millisecond)))
 			log.Info("Predict T+2","sleep",t)
 			if (t > 0) {
 				time.Sleep(t)
