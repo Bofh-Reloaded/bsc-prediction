@@ -427,7 +427,10 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 
 			if w.predConfig.P2Enabled {
 				if w.predConfig.P2Delay > 0 {
-					time.Sleep(w.predConfig.P2Delay * time.Millisecond)
+					t := w.predConfig.P2Delay * time.Millisecond - time.Duration(time.Now().Unix() - timestamp) * 1000 * time.Millisecond
+					if (t > 0) {
+						time.Sleep(t)
+					}
 				}
 				w.predData.step = 2
 				timestamp = time.Now().Unix()
