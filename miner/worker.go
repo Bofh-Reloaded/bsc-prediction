@@ -704,10 +704,13 @@ func (w *worker) resultLoop() {
 func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
-	state := w.current.state
+	var state *state.StateDB
 	var err error
+	if (w.current != nil) {
+		state = w.current.state
+	}
 
-	if (w.predData.step <= 1) {
+	if (w.predData.step <= 1 || state == nil) {
 		state, err = w.chain.StateAt(parent.Root())
 		if err != nil {
 			return err
