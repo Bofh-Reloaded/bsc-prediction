@@ -128,15 +128,15 @@ type intervalAdjust struct {
 }
 
 type PredictionConfig struct {
-	P1Enabled  bool `json:"p1Enabled"`
-	P1Delay    time.Duration `json:"p1Delay"`
-	P2Enabled bool `json:"p2Enabled"`
+	P1Enabled bool          `json:"p1Enabled"`
+	P1Delay   time.Duration `json:"p1Delay"`
+	P2Enabled bool          `json:"p2Enabled"`
 	P2Delay   time.Duration `json:"p2Delay"`
-	MaxDelta  uint64 `json:"maxDelta"`
+	MaxDelta  uint64        `json:"maxDelta"`
 }
 
 type PredictionData struct {
-	step      int
+	step       int
 	pBlock     *types.Block
 	pReceipts  []*types.Receipt
 	p2Block    *types.Block
@@ -146,7 +146,7 @@ type PredictionData struct {
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
-	predData	*PredictionData
+	predData    *PredictionData
 	predConfig  *PredictionConfig
 	config      *Config
 	chainConfig *params.ChainConfig
@@ -214,7 +214,7 @@ type worker struct {
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
-		predData: 			&PredictionData{step:0},
+		predData:           &PredictionData{step: 0},
 		predConfig:         &PredictionConfig{P1Enabled: true, P2Enabled: true, MaxDelta: 0, P1Delay: 20, P2Delay: 1200},
 		config:             config,
 		chainConfig:        chainConfig,
@@ -705,11 +705,16 @@ func (w *worker) resultLoop() {
 func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
-	state, err := w.chain.StateAt(parent.Root())
-	if err != nil {
-		return err
+	state := w.current.state
+	var err error
+
+	if (w.predData.step <= 1) {
+		state, err = w.chain.StateAt(parent.Root())
+		if err != nil {
+			return err
+		}
+		state.StartPrefetcher("miner")
 	}
-	state.StartPrefetcher("miner")
 
 	env := &environment{
 		signer:    types.MakeSigner(w.chainConfig, header.Number),
@@ -999,6 +1004,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		log.Error("Failed to create mining context", "err", err)
 		return
 	}
+
 	// Create the current work task and check any fork transitions needed
 	env := w.current
 	if w.chainConfig.DAOForkSupport && w.chainConfig.DAOForkBlock != nil && w.chainConfig.DAOForkBlock.Cmp(header.Number) == 0 {
@@ -1060,9 +1066,9 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 
 // PRD: This is basically a copy of the commitNewWork method
 func (w *worker) PredictBlock(step int) (*types.Block, []*types.Receipt, error) {
-	if (step == 1) {
+	if step == 1 {
 		return w.predData.pBlock, w.predData.pReceipts, nil
-	} else if (step == 2) {
+	} else if step == 2 {
 		return w.predData.p2Block, w.predData.p2Receipts, nil
 	}
 	return nil, nil, nil
