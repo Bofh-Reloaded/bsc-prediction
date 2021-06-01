@@ -435,20 +435,6 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 				}
 			}
 			commit(true, commitInterruptNewHead)
-
-			if w.predConfig.P2Enabled {
-				if w.predConfig.P2Delay > 0 {
-					t := w.predConfig.P2Delay * time.Millisecond - time.Duration(time.Now().Unix() - timestamp) * 1000 * time.Millisecond
-					if (t > 0) {
-						time.Sleep(t)
-					}
-				}
-				w.predData.step = 2
-				timestamp = time.Now().Unix()
-				commit(true, commitInterruptNewHead)
-			}
-
-
 		case <-timer.C:
 			// If mining is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
@@ -1068,7 +1054,20 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		commitTxsTimer.UpdateSince(start)
 		// log.Info("Gas pool", "height", header.Number.String(), "pool", w.current.gasPool.String())
 	}
-	w.commit(uncles, w.fullTaskHook, false, tstart)
+	w.commit(uncles, w.fullTaskHook, true, tstart)
+
+	if w.predConfig.P2Enabled && w.predData.step == 1 {
+		if w.predConfig.P2Delay > 0 {
+			t := w.predConfig.P2Delay * time.Millisecond - time.Duration(time.Now().Unix() - timestamp) * 1000 * time.Millisecond
+			log.Info("Predict T+2","sleep",t)
+			if (t > 0) {
+				time.Sleep(t)
+			}
+		}
+		w.predData.step = 2
+		timestamp = time.Now().Unix()
+		w.commitNewWork(interrupt, noempty, time.Now().Unix())
+	}
 }
 
 // PRD: This is basically a copy of the commitNewWork method
@@ -1117,6 +1116,9 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if update {
 		w.updateSnapshot()
 	}
+
+
+
 	return nil
 }
 
