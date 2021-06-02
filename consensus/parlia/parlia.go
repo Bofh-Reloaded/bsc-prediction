@@ -1220,6 +1220,7 @@ func (p *Parlia) applyTransaction(
 
 	// Set the receipt logs and create a bloom for filtering
 	receipt.Logs = state.GetLogs(expectedTx.Hash())
+	receipt.GasPrice = expectedTx.GasPrice()
 	receipt.Bloom = types.CreateBloom(types.Receipts{receipt})
 	receipt.BlockHash = state.BlockHash()
 	receipt.BlockNumber = header.Number
