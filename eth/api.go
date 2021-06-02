@@ -546,13 +546,22 @@ func (api *PrivateDebugAPI) getModifiedAccounts(startBlock, endBlock *types.Bloc
 }
 
 type BlockAndLogs struct {
-	Block map[string]interface{}
-	Logs []*types.Log
+	Block map[string]interface{} `json:"block"`
+	Logs []*types.Log `json:"logs"`
 }
 
-type PredictedLogs struct {
-	BlockNumber uint64
-	Logs []*types.Log
+type CompactPredictedLogs struct {
+	BlockNumber uint64 `json:"blockNumber"`
+	Transactions int `json:"transactions"`
+	Logs []*CompactLog `json:"logs"`
+}
+
+type CompactLog struct {
+	Address common.Address `json:"address" gencodec:"required"`
+	Data []byte `json:"data" gencodec:"required"`
+	TxIndex uint `json:"transactionIndex"`
+	GasPrice *big.Int `json:"gasPrice"`
+	Index uint `json:"logIndex"`
 }
 
 func (s *PublicEthereumAPI) PredictBlock(ctx context.Context, step int) (interface{}, error) {
@@ -575,17 +584,22 @@ func (s *PublicEthereumAPI) PredictBlock(ctx context.Context, step int) (interfa
 func (s *PublicEthereumAPI) PredictLogs(ctx context.Context, step int, hash common.Hash) (interface{}, error) {
 	block, receipts, err := s.e.Miner().PredictBlock(step)
 	if block != nil && err == nil {
-		bhash := block.Hash()
-		var logs []*types.Log
+		var logs []*CompactLog
 		for _, receipt := range receipts {
 			for _, log := range receipt.Logs {
-				log.BlockHash = bhash
-				if (log.Topics[0] == hash) {
-					logs = append(logs, log)
+				if (log.Topics[0] == hash && !log.Removed) {
+					cmp := &CompactLog{
+						Address: log.Address,
+						Data: log.Data,
+						TxIndex: log.TxIndex,
+						Index: log.Index,
+						GasPrice: receipt.GasPrice,
+					}
+					logs = append(logs, cmp)
 				}
 			}
 		}
-		return &PredictedLogs{BlockNumber: block.NumberU64(), Logs: logs}, nil
+		return &CompactPredictedLogs{BlockNumber: block.NumberU64(), Transactions: block.Transactions().Len(), Logs: logs}, nil
 	}
 	return nil, err
 }
