@@ -373,6 +373,7 @@ func (r Receipts) DeriveFields(config *params.ChainConfig, hash common.Hash, num
 		// The transaction type and hash can be retrieved from the transaction itself
 		r[i].Type = txs[i].Type()
 		r[i].TxHash = txs[i].Hash()
+		r[i].GasPrice = txs[i].GasPrice()
 
 		// block location fields
 		r[i].BlockHash = hash

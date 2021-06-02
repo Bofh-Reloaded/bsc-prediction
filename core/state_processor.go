@@ -474,6 +474,7 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 		receipt.Status = types.ReceiptStatusSuccessful
 	}
 	receipt.TxHash = tx.Hash()
+	receipt.GasPrice = tx.GasPrice()
 	receipt.GasUsed = result.UsedGas
 
 	// If the transaction created a contract, store the creation address in the receipt.
