@@ -553,7 +553,8 @@ type BlockAndLogs struct {
 type CompactPredictedLogs struct {
 	BlockNumber uint64 `json:"blockNumber"`
 	Transactions int `json:"transactions"`
-	Logs []*CompactLog `json:"logs"`
+	Logs []map[string]interface{} `json:"logs"`
+	//Logs []*CompactLog `json:"logs"`
 }
 
 type CompactLog struct {
@@ -584,17 +585,16 @@ func (s *PublicEthereumAPI) PredictBlock(ctx context.Context, step int) (interfa
 func (s *PublicEthereumAPI) PredictLogs(ctx context.Context, step int, hash common.Hash) (interface{}, error) {
 	block, receipts, err := s.e.Miner().PredictBlock(step)
 	if block != nil && err == nil {
-		var logs []*CompactLog
+		var logs []map[string]interface{}
 		for _, receipt := range receipts {
 			for _, log := range receipt.Logs {
 				if (log.Topics[0] == hash && !log.Removed) {
-					cmp := &CompactLog{
-						Address: log.Address,
-						Data: log.Data,
-						TxIndex: log.TxIndex,
-						Index: log.Index,
-						GasPrice: receipt.GasPrice,
-					}
+					cmp := make(map[string]interface{}, 5)
+					cmp["address"] = log.Address
+					cmp["data"] = hexutil.Bytes(log.Data)
+					cmp["transactionIndex"] = hexutil.Uint(log.TxIndex)
+					cmp["logIndex"] = hexutil.Uint(log.Index)
+					cmp["gasPrice"] = hexutil.Big(*receipt.GasPrice)
 					logs = append(logs, cmp)
 				}
 			}
