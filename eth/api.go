@@ -554,15 +554,6 @@ type CompactPredictedLogs struct {
 	BlockNumber uint64 `json:"blockNumber"`
 	Transactions int `json:"transactions"`
 	Logs []map[string]interface{} `json:"logs"`
-	//Logs []*CompactLog `json:"logs"`
-}
-
-type CompactLog struct {
-	Address common.Address `json:"address" gencodec:"required"`
-	Data []byte `json:"data" gencodec:"required"`
-	TxIndex uint `json:"transactionIndex"`
-	GasPrice *big.Int `json:"gasPrice"`
-	Index uint `json:"logIndex"`
 }
 
 func (s *PublicEthereumAPI) PredictBlock(ctx context.Context, step int) (interface{}, error) {
@@ -591,6 +582,7 @@ func (s *PublicEthereumAPI) PredictLogs(ctx context.Context, step int, hash comm
 				if (log.Topics[0] == hash && !log.Removed) {
 					cmp := make(map[string]interface{}, 5)
 					cmp["address"] = log.Address
+					cmp["tx"] = log.TxHash
 					cmp["data"] = hexutil.Bytes(log.Data)
 					cmp["transactionIndex"] = hexutil.Uint(log.TxIndex)
 					cmp["logIndex"] = hexutil.Uint(log.Index)
