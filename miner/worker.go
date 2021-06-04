@@ -419,24 +419,9 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			}
 
 			if w.predConfig.ConsPrediction {
-				timestamp = time.Now().Unix()
-				tsmp := timestamp
-				parent := w.chain.CurrentBlock()
-
-				if parent.Time() >= uint64(timestamp) {
-					tsmp = int64(parent.Time() + 1)
-				}
-				num := parent.Number()
-				header := &types.Header{
-					ParentHash: parent.Hash(),
-					Number:     num.Add(num, common.Big1),
-					GasLimit:   core.CalcGasLimit(parent, w.config.GasFloor, w.config.GasCeil),
-					Extra:      w.extra,
-					Time:       uint64(tsmp),
-				}
-				w.makeCurrent(parent, header)
 				w.eth.TxPool().EnsurePromotionDone()
 				clearPending(head.Block.NumberU64())
+				timestamp = time.Now().Unix()
 				commit(true, commitInterruptNewHead)
 				continue
 			}
@@ -741,6 +726,9 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	}
 	// Keep track of transactions which return errors so they can be removed
 	env.tcount = 0
+
+	env.gasPool = new(core.GasPool).AddGas(env.header.GasLimit)
+	env.gasPool.SubGas(params.SystemTxsGas)
 
 	// Swap out the old work with the new one, terminating any leftover prefetcher
 	// processes in the mean time and starting a new one.
