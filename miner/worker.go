@@ -128,11 +128,12 @@ type intervalAdjust struct {
 }
 
 type PredictionConfig struct {
-	P1Enabled bool          `json:"p1Enabled"`
-	P1Delay   time.Duration `json:"p1Delay"`
-	P2Enabled bool          `json:"p2Enabled"`
-	P2Delay   time.Duration `json:"p2Delay"`
-	MaxDelta  uint64        `json:"maxDelta"`
+	P1Enabled      bool          `json:"p1Enabled"`
+	P1Delay        time.Duration `json:"p1Delay"`
+	P2Enabled      bool          `json:"p2Enabled"`
+	P2Delay        time.Duration `json:"p2Delay"`
+	MaxDelta       uint64        `json:"maxDelta"`
+	ConsPrediction bool          `json:"consPrediction"`
 }
 
 type PredictionData struct {
@@ -215,7 +216,7 @@ type worker struct {
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
 		predData:           &PredictionData{step: 0},
-		predConfig:         &PredictionConfig{P1Enabled: true, P2Enabled: true, MaxDelta: 0, P1Delay: 20, P2Delay: 1200},
+		predConfig:         &PredictionConfig{P1Enabled: true, P2Enabled: true, MaxDelta: 0, P1Delay: 20, P2Delay: 1200, ConsPrediction: false},
 		config:             config,
 		chainConfig:        chainConfig,
 		engine:             engine,
@@ -412,7 +413,30 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			/*if !w.isRunning() {
 				continue
 			}*/
-			if !w.predConfig.P1Enabled {
+			if !w.predConfig.P1Enabled && !w.predConfig.ConsPrediction {
+				continue
+			}
+
+			if w.predConfig.ConsPrediction {
+				timestamp = time.Now().Unix()
+				tsmp := timestamp
+				parent := w.chain.CurrentBlock()
+
+				if parent.Time() >= uint64(timestamp) {
+					tsmp = int64(parent.Time() + 1)
+				}
+				num := parent.Number()
+				header := &types.Header{
+					ParentHash: parent.Hash(),
+					Number:     num.Add(num, common.Big1),
+					GasLimit:   core.CalcGasLimit(parent, w.config.GasFloor, w.config.GasCeil),
+					Extra:      w.extra,
+					Time:       uint64(tsmp),
+				}
+				w.makeCurrent(parent, header)
+				w.eth.TxPool().EnsurePromotionDone()
+				clearPending(head.Block.NumberU64())
+				commit(true, commitInterruptNewHead)
 				continue
 			}
 
@@ -533,7 +557,7 @@ func (w *worker) mainLoop() {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current mining block. These transactions will
 			// be automatically eliminated.
-			if !w.isRunning() && w.current != nil {
+			if !w.isRunning() && w.current != nil && w.predConfig.ConsPrediction {
 				// If block is already full, abort
 				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
 					continue
@@ -553,8 +577,7 @@ func (w *worker) mainLoop() {
 				// Only update the snapshot if any new transactons were added
 				// to the pending block
 				if tcount != w.current.tcount {
-					// PRD Change
-					// w.updateSnapshot()
+					w.updateSnapshot()
 				}
 			} else {
 				// Special case, if the consensus engine is 0 period clique(dev mode),
@@ -699,11 +722,11 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	// the miner to speed block sealing up a bit
 	var state *state.StateDB
 	var err error
-	if (w.current != nil) {
+	if w.current != nil {
 		state = w.current.state
 	}
 
-	if (w.predData.step <= 1 || state == nil) {
+	if w.predData.step <= 1 || state == nil {
 		state, err = w.chain.StateAt(parent.Root())
 		if err != nil {
 			return err
@@ -732,7 +755,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 
 	// Swap out the old work with the new one, terminating any leftover prefetcher
 	// processes in the mean time and starting a new one.
-	if (w.predData.step <= 1) {
+	if w.predData.step <= 1 {
 		if w.current != nil && w.current.state != nil {
 			w.current.state.StopPrefetcher()
 		}
@@ -1082,14 +1105,15 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		commitTxsTimer.UpdateSince(start)
 		// log.Info("Gas pool", "height", header.Number.String(), "pool", w.current.gasPool.String())
 	}
-	w.commit(uncles, w.fullTaskHook, true, tstart)
+	if (!w.predConfig.ConsPrediction) {
+		w.commit(uncles, w.fullTaskHook, true, tstart)
+	}
 
-	if w.predConfig.P2Enabled && w.predData.step == 1 {
+	if w.predConfig.P2Enabled && w.predData.step == 1 && !w.predConfig.ConsPrediction {
 		if w.predConfig.P2Delay > 0 {
-			tx := w.predConfig.P2Delay * time.Millisecond - time.Duration(time.Now().Unix() - timestamp) * 1000 * time.Millisecond
-			t := time.Duration(minVal(int64(tx), int64(w.predConfig.P2Delay * time.Millisecond)))
-			log.Info("Predict T+2","sleep",t)
-			if (t > 0) {
+			tx := w.predConfig.P2Delay*time.Millisecond - time.Duration(time.Now().Unix()-timestamp)*1000*time.Millisecond
+			t := time.Duration(minVal(int64(tx), int64(w.predConfig.P2Delay*time.Millisecond)))
+			if t > 0 {
 				time.Sleep(t)
 			}
 		}
@@ -1101,10 +1125,10 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 }
 
 func minVal(x, y int64) int64 {
- if x < y {
-   return x
- }
- return y
+	if x < y {
+		return x
+	}
+	return y
 }
 
 // PRD: This is basically a copy of the commitNewWork method
@@ -1125,7 +1149,7 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if err != nil {
 		return err
 	}
-	log.Info("New block minted ", "blockNumber", block.Number(), "trxs", block.Transactions().Len(), "gas", block.GasUsed())
+	log.Info("New block minted ", "step", w.predData.step, "blockNumber", block.Number(), "trxs", block.Transactions().Len(), "gas", block.GasUsed())
 	if w.predData.step == 1 {
 		w.predData.pBlock = block
 		w.predData.pReceipts = receipts
@@ -1153,8 +1177,6 @@ func (w *worker) commit(uncles []*types.Header, interval func(), update bool, st
 	if update {
 		w.updateSnapshot()
 	}
-
-
 
 	return nil
 }
