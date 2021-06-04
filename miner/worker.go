@@ -406,6 +406,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			commit(true, commitInterruptNewHead)
 
 		case head := <-w.chainHeadCh:
+			w.predData.step = 0
 			progress := w.eth.Downloader().Progress()
 			if progress.CurrentBlock < progress.HighestBlock {
 				continue
@@ -553,7 +554,7 @@ func (w *worker) mainLoop() {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current mining block. These transactions will
 			// be automatically eliminated.
-			if !w.isRunning() && w.current != nil && w.predConfig.ConsPrediction {
+			if !w.isRunning() && w.current != nil && w.predConfig.ConsPrediction && w.predData.step > 0 {
 				// If block is already full, abort
 				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
 					continue
@@ -1080,6 +1081,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	}
 	if (!w.predConfig.ConsPrediction) {
 		w.commit(uncles, w.fullTaskHook, true, tstart)
+	} else {
+		w.predData.step = 1
 	}
 
 	if w.predConfig.P2Enabled && w.predData.step == 1 && !w.predConfig.ConsPrediction {
