@@ -159,6 +159,10 @@ func (miner *Miner) PredictBlock(step int) (*types.Block, []*types.Receipt, erro
 	return miner.worker.PredictBlock(step)
 }
 
+func (miner *Miner) ConsPredictBlock() (*types.Block, []*types.Receipt, error) {
+	return miner.worker.snapshotBlock, miner.worker.current.receipts, nil
+}
+
 
 func (miner *Miner) Start(coinbase common.Address) {
 	miner.startCh <- coinbase

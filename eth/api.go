@@ -94,13 +94,21 @@ func NewPrivateMinerAPI(e *Ethereum) *PrivateMinerAPI {
 	return &PrivateMinerAPI{e: e}
 }
 
-func (api *PublicMinerAPI) SetPredictionConfig(p1Enabled bool, p1Delay int, p2Enabled bool, p2Delay int, maxDelta int) (*miner.PredictionConfig, error) {
+func (api *PublicMinerAPI) SetPredictionConfig(
+	p1Enabled bool,
+	p1Delay int,
+	p2Enabled bool,
+	p2Delay int,
+	maxDelta int,
+	consPrediction bool,
+) (*miner.PredictionConfig, error) {
 	api.e.miner.SetPredictionConfig(&miner.PredictionConfig{
 		P1Enabled: p1Enabled,
 		P2Enabled: p2Enabled,
 		MaxDelta: uint64(maxDelta),
 		P1Delay: time.Duration(p1Delay),
 		P2Delay: time.Duration(p2Delay),
+		ConsPrediction: consPrediction,
 	})
 	return api.GetPredictionConfig()
 }
@@ -586,6 +594,43 @@ func (s *PublicEthereumAPI) PredictLogs(ctx context.Context, step int, hash comm
 					cmp["data"] = hexutil.Bytes(log.Data)
 					cmp["transactionIndex"] = hexutil.Uint(log.TxIndex)
 					cmp["logIndex"] = hexutil.Uint(log.Index)
+					cmp["gasPrice"] = hexutil.Big(*receipt.GasPrice)
+					logs = append(logs, cmp)
+				}
+			}
+		}
+		return &CompactPredictedLogs{BlockNumber: block.NumberU64(), Transactions: block.Transactions().Len(), Logs: logs}, nil
+	}
+	return nil, err
+}
+
+func (s *PublicEthereumAPI) ConsPredictBlock(ctx context.Context) (interface{}, error) {
+	block, receipts, err := s.e.Miner().ConsPredictBlock()
+	if block != nil && err == nil {
+		var logs []*types.Log
+		for _, receipt := range receipts {
+			for _, log := range receipt.Logs {
+				log.BlockHash = block.Hash()
+			}
+			logs = append(logs, receipt.Logs...)
+		}
+
+		b, berr := s.rpcMarshalBlock(ctx, block, true, true)
+		return &BlockAndLogs{Block: b, Logs: logs}, berr
+	}
+	return nil, err
+}
+
+func (s *PublicEthereumAPI) ConsPredictLogs(ctx context.Context, hash common.Hash) (interface{}, error) {
+	block, receipts, err := s.e.Miner().ConsPredictBlock()
+	if block != nil && err == nil {
+		var logs []map[string]interface{}
+		for _, receipt := range receipts {
+			for _, log := range receipt.Logs {
+				if (log.Topics[0] == hash && !log.Removed) {
+					cmp := make(map[string]interface{}, 5)
+					cmp["address"] = log.Address
+					cmp["data"] = hexutil.Bytes(log.Data)
 					cmp["gasPrice"] = hexutil.Big(*receipt.GasPrice)
 					logs = append(logs, cmp)
 				}
