@@ -1083,6 +1083,8 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	if (!w.predConfig.ConsPrediction) {
 		w.commit(uncles, w.fullTaskHook, true, tstart)
 	} else {
+		w.current.txs = make([]*types.Transaction, 0)
+		w.current.receipts = make([]*types.Receipt, 0)
 		w.predData.step = 1
 	}
 
