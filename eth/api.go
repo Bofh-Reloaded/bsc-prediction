@@ -621,13 +621,18 @@ func (s *PublicEthereumAPI) ConsPredictBlock(ctx context.Context) (interface{}, 
 	return nil, err
 }
 
-func (s *PublicEthereumAPI) ConsPredictLogs(ctx context.Context, hash common.Hash) (interface{}, error) {
+func (s *PublicEthereumAPI) ConsPredictLogs(ctx context.Context, blockNumber uint64, logIndex uint, hash common.Hash) (interface{}, error) {
 	block, receipts, err := s.e.Miner().ConsPredictBlock()
 	if block != nil && err == nil {
+		number := block.NumberU64()
+		max := logIndex
+		if (number != blockNumber) {
+			max = -1
+		}
 		var logs []map[string]interface{}
 		for _, receipt := range receipts {
 			for _, log := range receipt.Logs {
-				if (log.Topics[0] == hash && !log.Removed) {
+				if (log.Topics[0] == hash && !log.Removed && log.Index > max) {
 					cmp := make(map[string]interface{}, 5)
 					cmp["address"] = log.Address
 					cmp["tx"] = log.TxHash
@@ -639,7 +644,7 @@ func (s *PublicEthereumAPI) ConsPredictLogs(ctx context.Context, hash common.Has
 				}
 			}
 		}
-		return &CompactPredictedLogs{BlockNumber: block.NumberU64(), Transactions: block.Transactions().Len(), Logs: logs}, nil
+		return &CompactPredictedLogs{BlockNumber: number, Transactions: block.Transactions().Len(), Logs: logs}, nil
 	}
 	return nil, err
 }
