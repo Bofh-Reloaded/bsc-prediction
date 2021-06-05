@@ -631,8 +631,11 @@ func (s *PublicEthereumAPI) ConsPredictLogs(ctx context.Context, blockNumber uin
 		}
 		var logs []map[string]interface{}
 		for _, receipt := range receipts {
+			if (receipt.TransactionIndex < max) {
+				continue
+			}
 			for _, log := range receipt.Logs {
-				if (log.Topics[0] == hash && !log.Removed && log.Index >= max) {
+				if (log.Topics[0] == hash && !log.Removed) {
 					cmp := make(map[string]interface{}, 5)
 					cmp["address"] = log.Address
 					cmp["tx"] = log.TxHash
