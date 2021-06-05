@@ -418,18 +418,13 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 				continue
 			}
 
-			if w.predConfig.ConsPrediction {
-				w.eth.TxPool().EnsurePromotionDone()
-				clearPending(head.Block.NumberU64())
-				timestamp = time.Now().Unix()
-				commit(true, commitInterruptNewHead)
-				continue
+			if !w.predConfig.ConsPrediction {
+				w.predData.step = 1
 			}
 
 			if w.predConfig.P1Delay > 0 {
 				time.Sleep(w.predConfig.P1Delay * time.Millisecond)
 			}
-			w.predData.step = 1
 			w.eth.TxPool().EnsurePromotionDone()
 			clearPending(head.Block.NumberU64())
 			timestamp = time.Now().Unix()
