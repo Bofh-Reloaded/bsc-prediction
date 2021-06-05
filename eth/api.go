@@ -640,7 +640,7 @@ func (s *PublicEthereumAPI) ConsPredictLogs(ctx context.Context, blockNumber uin
 					cmp["address"] = log.Address
 					cmp["tx"] = log.TxHash
 					cmp["data"] = hexutil.Bytes(log.Data)
-					cmp["transactionIndex"] = hexutil.Uint(log.TxIndex)
+					cmp["transactionIndex"] = hexutil.Uint(receipt.TransactionIndex)
 					cmp["logIndex"] = hexutil.Uint(log.Index)
 					cmp["gasPrice"] = hexutil.Big(*receipt.GasPrice)
 					logs = append(logs, cmp)
