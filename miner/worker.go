@@ -557,6 +557,11 @@ func (w *worker) mainLoop() {
 					w.updateSnapshot()
 				}
 			} else {
+				if (w.predConfig.ConsPrediction) {
+					for _, tx := range ev.Txs {
+						log.Info("Cons Pred, missing trx","tx", tx.Hash())
+					}
+				}
 				// Special case, if the consensus engine is 0 period clique(dev mode),
 				// submit mining work here since all empty submission will be rejected
 				// by clique. Of course the advance sealing(empty submission) is disabled.
@@ -1065,8 +1070,10 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	if (!w.predConfig.ConsPrediction) {
 		w.commit(uncles, w.fullTaskHook, true, tstart)
 	} else {
-		w.current.txs = make([]*types.Transaction, 0)
-		w.current.receipts = make([]*types.Receipt, 0)
+		// TEST Only
+		w.commit(uncles, w.fullTaskHook, true, tstart)
+		//w.current.txs = make([]*types.Transaction, 0)
+		//w.current.receipts = make([]*types.Receipt, 0)
 		w.predData.step = 1
 	}
 
