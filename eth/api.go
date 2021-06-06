@@ -101,6 +101,7 @@ func (api *PublicMinerAPI) SetPredictionConfig(
 	p2Delay int,
 	maxDelta int,
 	consPrediction bool,
+	debug bool,
 ) (*miner.PredictionConfig, error) {
 	api.e.miner.SetPredictionConfig(&miner.PredictionConfig{
 		P1Enabled: p1Enabled,
@@ -109,6 +110,7 @@ func (api *PublicMinerAPI) SetPredictionConfig(
 		P1Delay: time.Duration(p1Delay),
 		P2Delay: time.Duration(p2Delay),
 		ConsPrediction: consPrediction,
+		Debug: debug,
 	})
 	return api.GetPredictionConfig()
 }
