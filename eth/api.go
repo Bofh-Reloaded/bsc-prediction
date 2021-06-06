@@ -607,10 +607,17 @@ func (s *PublicEthereumAPI) PredictLogs(ctx context.Context, step int, hash comm
 func (s *PublicEthereumAPI) ConsPredictBlock(ctx context.Context) (interface{}, error) {
 	block, receipts, err := s.e.Miner().ConsPredictBlock()
 	if block != nil && err == nil {
+
+		trxs := make(map[common.Hash]uint)
+		for idx, trx := range block.Transactions() {
+			trxs[trx.Hash()] = uint(idx)
+		}
+
 		var logs []*types.Log
 		for _, receipt := range receipts {
 			for _, log := range receipt.Logs {
 				log.BlockHash = block.Hash()
+				log.TxIndex = trxs[receipt.TxHash]
 			}
 			logs = append(logs, receipt.Logs...)
 		}
@@ -629,9 +636,16 @@ func (s *PublicEthereumAPI) ConsPredictLogs(ctx context.Context, blockNumber uin
 		if (number != blockNumber) {
 			max = 0
 		}
+
+		trxs := make(map[common.Hash]uint)
+		for idx, trx := range block.Transactions() {
+			trxs[trx.Hash()] = uint(idx)
+		}
+
 		var logs []map[string]interface{}
 		for _, receipt := range receipts {
-			if (receipt.TransactionIndex < max) {
+			idx := trxs[receipt.TxHash]
+			if (idx < max) {
 				continue
 			}
 			for _, log := range receipt.Logs {
@@ -640,7 +654,7 @@ func (s *PublicEthereumAPI) ConsPredictLogs(ctx context.Context, blockNumber uin
 					cmp["address"] = log.Address
 					cmp["tx"] = log.TxHash
 					cmp["data"] = hexutil.Bytes(log.Data)
-					cmp["transactionIndex"] = hexutil.Uint(receipt.TransactionIndex)
+					cmp["transactionIndex"] = hexutil.Uint(idx)
 					cmp["logIndex"] = hexutil.Uint(log.Index)
 					cmp["gasPrice"] = hexutil.Big(*receipt.GasPrice)
 					logs = append(logs, cmp)
