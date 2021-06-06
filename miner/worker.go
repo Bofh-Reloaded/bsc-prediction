@@ -134,6 +134,7 @@ type PredictionConfig struct {
 	P2Delay        time.Duration `json:"p2Delay"`
 	MaxDelta       uint64        `json:"maxDelta"`
 	ConsPrediction bool          `json:"consPrediction"`
+	Debug bool          `json:"debug"`
 }
 
 type PredictionData struct {
@@ -216,7 +217,7 @@ type worker struct {
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
 		predData:           &PredictionData{step: 0},
-		predConfig:         &PredictionConfig{P1Enabled: true, P2Enabled: true, MaxDelta: 0, P1Delay: 20, P2Delay: 1200, ConsPrediction: false},
+		predConfig:         &PredictionConfig{P1Enabled: true, P2Enabled: true, MaxDelta: 0, P1Delay: 20, P2Delay: 1200, ConsPrediction: false, Debug: false},
 		config:             config,
 		chainConfig:        chainConfig,
 		engine:             engine,
@@ -1097,10 +1098,12 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	if (!w.predConfig.ConsPrediction) {
 		w.commit(uncles, w.fullTaskHook, true, tstart)
 	} else {
-		// TEST Only
-		w.commit(uncles, w.fullTaskHook, true, tstart)
-		//w.current.txs = make([]*types.Transaction, 0)
-		//w.current.receipts = make([]*types.Receipt, 0)
+		if (w.predConfig.Debug) {
+			w.commit(uncles, w.fullTaskHook, true, tstart)
+		} else {
+			w.current.txs = make([]*types.Transaction, 0)
+			w.current.receipts = make([]*types.Receipt, 0)
+		}
 		w.predData.step = 1
 	}
 
