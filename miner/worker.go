@@ -569,7 +569,7 @@ func (w *worker) mainLoop() {
 			} else {
 				if w.predConfig.ConsPrediction {
 					for _, tx := range ev.Txs {
-						log.Info("Cons Pred, missing trx", "tx", tx.Hash())
+						log.Info("Cons Pred (queued), missing trx", "tx", tx.Hash())
 					}
 				}
 				// Special case, if the consensus engine is 0 period clique(dev mode),
