@@ -134,7 +134,8 @@ type PredictionConfig struct {
 	P2Delay        time.Duration `json:"p2Delay"`
 	MaxDelta       uint64        `json:"maxDelta"`
 	ConsPrediction bool          `json:"consPrediction"`
-	Debug bool          `json:"debug"`
+	UseQueuedTrxs  bool          `json:"useQueuedTrxs"`
+	Debug          bool          `json:"debug"`
 }
 
 type PredictionData struct {
@@ -162,7 +163,9 @@ type worker struct {
 	// Subscriptions
 	mux          *event.TypeMux
 	txsCh        chan core.NewTxsEvent
+	queuedTxsCh  chan core.NewTxsEvent
 	txsSub       event.Subscription
+	queuedTxsSub event.Subscription
 	chainHeadCh  chan core.ChainHeadEvent
 	chainHeadSub event.Subscription
 	chainSideCh  chan core.ChainSideEvent
@@ -217,7 +220,7 @@ type worker struct {
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
 		predData:           &PredictionData{step: 0},
-		predConfig:         &PredictionConfig{P1Enabled: true, P2Enabled: true, MaxDelta: 0, P1Delay: 20, P2Delay: 1200, ConsPrediction: false, Debug: false},
+		predConfig:         &PredictionConfig{P1Enabled: true, P2Enabled: true, MaxDelta: 0, P1Delay: 20, P2Delay: 1200, ConsPrediction: false, Debug: false, UseQueuedTrxs: false},
 		config:             config,
 		chainConfig:        chainConfig,
 		engine:             engine,
@@ -230,6 +233,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), miningLogAtDepth),
 		pendingTasks:       make(map[common.Hash]*task),
 		txsCh:              make(chan core.NewTxsEvent, txChanSize),
+		queuedTxsCh:        make(chan core.NewTxsEvent, txChanSize*2),
 		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
 		newWorkCh:          make(chan *newWorkReq),
@@ -242,6 +246,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	}
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
+	worker.queuedTxsSub = eth.TxPool().SubscribeNewQueuedTxsEvent(worker.queuedTxsCh)
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
@@ -481,6 +486,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 
 // mainLoop is a standalone goroutine to regenerate the sealing task based on the received event.
 func (w *worker) mainLoop() {
+	defer w.queuedTxsSub.Unsubscribe()
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
 	defer w.chainSideSub.Unsubscribe()
@@ -532,13 +538,15 @@ func (w *worker) mainLoop() {
 					w.commit(uncles, nil, true, start)
 				}
 			}
-
-		case ev := <-w.txsCh:
+		case ev := <-w.queuedTxsCh:
 			// Apply transactions to the pending state if we're not mining.
 			//
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current mining block. These transactions will
 			// be automatically eliminated.
+			if (!w.predConfig.UseQueuedTrxs) {
+				continue
+			}
 			if !w.isRunning() && w.current != nil && w.predConfig.ConsPrediction && w.predData.step > 0 {
 				// If block is already full, abort
 				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
@@ -562,9 +570,56 @@ func (w *worker) mainLoop() {
 					w.updateSnapshot()
 				}
 			} else {
-				if (w.predConfig.ConsPrediction) {
+				if w.predConfig.ConsPrediction {
 					for _, tx := range ev.Txs {
-						log.Info("Cons Pred, missing trx","tx", tx.Hash())
+						log.Info("Cons Pred, missing trx", "tx", tx.Hash())
+					}
+				}
+				// Special case, if the consensus engine is 0 period clique(dev mode),
+				// submit mining work here since all empty submission will be rejected
+				// by clique. Of course the advance sealing(empty submission) is disabled.
+				if (w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0) ||
+					(w.chainConfig.Parlia != nil && w.chainConfig.Parlia.Period == 0) {
+					w.commitNewWork(nil, true, time.Now().Unix())
+				}
+			}
+			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
+
+		case ev := <-w.txsCh:
+			// Apply transactions to the pending state if we're not mining.
+			//
+			// Note all transactions received may not be continuous with transactions
+			// already included in the current mining block. These transactions will
+			// be automatically eliminated.
+			if (w.predConfig.UseQueuedTrxs) {
+				continue
+			}
+			if !w.isRunning() && w.current != nil && w.predConfig.ConsPrediction && w.predData.step > 0 {
+				// If block is already full, abort
+				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
+					continue
+				}
+				w.mu.RLock()
+				coinbase := w.coinbase
+				w.mu.RUnlock()
+
+				txs := make(map[common.Address]types.Transactions)
+				for _, tx := range ev.Txs {
+					acc, _ := types.Sender(w.current.signer, tx)
+					txs[acc] = append(txs[acc], tx)
+				}
+				txset := types.NewTransactionsByPriceAndNonce(w.current.signer, txs)
+				tcount := w.current.tcount
+				w.commitTransactions(txset, coinbase, nil, 0, m)
+				// Only update the snapshot if any new transactons were added
+				// to the pending block
+				if tcount != w.current.tcount {
+					w.updateSnapshot()
+				}
+			} else {
+				if w.predConfig.ConsPrediction {
+					for _, tx := range ev.Txs {
+						log.Info("Cons Pred, missing trx", "tx", tx.Hash())
 					}
 				}
 				// Special case, if the consensus engine is 0 period clique(dev mode),
@@ -581,6 +636,8 @@ func (w *worker) mainLoop() {
 		case <-w.exitCh:
 			return
 		case <-w.txsSub.Err():
+			return
+		case <-w.queuedTxsSub.Err():
 			return
 		case <-w.chainHeadSub.Err():
 			return
@@ -1095,10 +1152,10 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		commitTxsTimer.UpdateSince(start)
 		// log.Info("Gas pool", "height", header.Number.String(), "pool", w.current.gasPool.String())
 	}
-	if (!w.predConfig.ConsPrediction) {
+	if !w.predConfig.ConsPrediction {
 		w.commit(uncles, w.fullTaskHook, true, tstart)
 	} else {
-		if (w.predConfig.Debug) {
+		if w.predConfig.Debug {
 			w.commit(uncles, w.fullTaskHook, true, tstart)
 		} else {
 			w.current.txs = make([]*types.Transaction, 0)
