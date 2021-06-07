@@ -670,7 +670,10 @@ func (w *worker) checkCurrent(timestamp int64) {
 		Time:       uint64(timestamp),
 	}
 	log.Info("Create new pending block","block",header.Number.Uint64())
-	w.makeCurrent(parent, header)
+	// Initialize header
+	_ = w.engine.Prepare(w.chain, header)
+	// Make new current block
+	_ = w.makeCurrent(parent, header)
 }
 
 // taskLoop is a standalone goroutine to fetch sealing task from the generator and
