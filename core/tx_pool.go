@@ -913,7 +913,7 @@ func (pool *TxPool) EnsurePromotionDone() {
 func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) ([]error, *accountSet,[]*types.Transaction) {
 	dirty := newAccountSet(pool.signer)
 	errs := make([]error, len(txs))
-	valid := make([]*types.Transaction, len(txs))
+	valid := make([]*types.Transaction, 0)
 	for i, tx := range txs {
 		replaced, err := pool.add(tx, local)
 		errs[i] = err
