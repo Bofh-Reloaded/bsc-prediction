@@ -135,6 +135,7 @@ type PredictionConfig struct {
 	MaxDelta       uint64        `json:"maxDelta"`
 	ConsPrediction bool          `json:"consPrediction"`
 	UseQueuedTrxs  bool          `json:"useQueuedTrxs"`
+	Mode           uint          `json:"mode"`
 	Debug          bool          `json:"debug"`
 }
 
@@ -220,7 +221,7 @@ type worker struct {
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
 		predData:           &PredictionData{step: 0},
-		predConfig:         &PredictionConfig{P1Enabled: true, P2Enabled: true, MaxDelta: 0, P1Delay: 20, P2Delay: 1200, ConsPrediction: false, Debug: false, UseQueuedTrxs: false},
+		predConfig:         &PredictionConfig{P1Enabled: true, P2Enabled: true, MaxDelta: 0, P1Delay: 20, P2Delay: 1200, ConsPrediction: false, Debug: false, UseQueuedTrxs: false, Mode: 0},
 		config:             config,
 		chainConfig:        chainConfig,
 		engine:             engine,
@@ -414,7 +415,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		case head := <-w.chainHeadCh:
 			w.predData.step = 0
 			progress := w.eth.Downloader().Progress()
-			if progress.CurrentBlock < progress.HighestBlock {
+			if progress.CurrentBlock < progress.HighestBlock || w.predConfig.Mode == 1 {
 				continue
 			}
 			/*if !w.isRunning() {
@@ -540,14 +541,15 @@ func (w *worker) mainLoop() {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current mining block. These transactions will
 			// be automatically eliminated.
-			if (!w.predConfig.UseQueuedTrxs) {
+			if !w.predConfig.UseQueuedTrxs {
 				continue
 			}
-			if !w.isRunning() && w.current != nil && w.predConfig.ConsPrediction && w.predData.step > 0 {
+			if !w.isRunning() && w.predConfig.ConsPrediction && ((w.current != nil && w.predData.step > 0) || w.predConfig.Mode == 1) {
+				w.checkCurrent(time.Now().Unix())
 				// If block is already full, abort
-				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
-					continue
-				}
+				//if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
+				//	continue
+				//}
 				w.mu.RLock()
 				coinbase := w.coinbase
 				w.mu.RUnlock()
@@ -587,14 +589,16 @@ func (w *worker) mainLoop() {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current mining block. These transactions will
 			// be automatically eliminated.
-			if (w.predConfig.UseQueuedTrxs) {
+			if w.predConfig.UseQueuedTrxs {
 				continue
 			}
-			if !w.isRunning() && w.current != nil && w.predConfig.ConsPrediction && w.predData.step > 0 {
+			if !w.isRunning() && w.predConfig.ConsPrediction && ((w.current != nil && w.predData.step > 0) || w.predConfig.Mode == 1) {
+				w.checkCurrent(time.Now().Unix())
+
 				// If block is already full, abort
-				if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
-					continue
-				}
+				//if gp := w.current.gasPool; gp != nil && gp.Gas() < params.TxGas {
+				//	continue
+				//}
 				w.mu.RLock()
 				coinbase := w.coinbase
 				w.mu.RUnlock()
@@ -641,6 +645,28 @@ func (w *worker) mainLoop() {
 			return
 		}
 	}
+}
+
+func (w *worker) checkCurrent(timestamp int64) {
+	if w.predConfig.Mode != 1 || (w.current != nil && w.current.header.Number.Uint64() > w.chain.CurrentBlock().NumberU64()) {
+		return
+	}
+
+	parent := w.chain.CurrentBlock()
+
+	if parent.Time() >= uint64(timestamp) {
+		timestamp = int64(parent.Time() + 1)
+	}
+	num := parent.Number()
+	header := &types.Header{
+		ParentHash: parent.Hash(),
+		Number:     num.Add(num, common.Big1),
+		GasLimit:   core.CalcGasLimit(parent, w.config.GasFloor, w.config.GasCeil),
+		Extra:      w.extra,
+		Time:       uint64(timestamp),
+	}
+	log.Info("Create new pending block","block",header.Number.Uint64())
+	w.makeCurrent(parent, header)
 }
 
 // taskLoop is a standalone goroutine to fetch sealing task from the generator and
@@ -1129,6 +1155,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 	if !w.predConfig.ConsPrediction {
 		w.commit(uncles, w.fullTaskHook, true, tstart)
 	} else {
+		log.Info("Prepare T+1 for cons prediction","block",header.Number.Uint64())
 		if w.predConfig.Debug {
 			w.commit(uncles, w.fullTaskHook, true, tstart)
 		} else {
