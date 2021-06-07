@@ -102,6 +102,7 @@ func (api *PublicMinerAPI) SetPredictionConfig(
 	maxDelta int,
 	consPrediction bool,
 	useQueuedTransactions bool,
+	mode uint,
 	debug bool,
 ) (*miner.PredictionConfig, error) {
 	api.e.miner.SetPredictionConfig(&miner.PredictionConfig{
@@ -112,6 +113,7 @@ func (api *PublicMinerAPI) SetPredictionConfig(
 		P2Delay: time.Duration(p2Delay),
 		ConsPrediction: consPrediction,
 		UseQueuedTrxs: useQueuedTransactions,
+		Mode: mode,
 		Debug: debug,
 	})
 	return api.GetPredictionConfig()
