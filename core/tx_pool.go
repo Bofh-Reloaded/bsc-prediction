@@ -224,6 +224,7 @@ type TxPool struct {
 	chain       blockChain
 	gasPrice    *big.Int
 	txFeed      event.Feed
+	queuedTxFeed      event.Feed
 	scope       event.SubscriptionScope
 	signer      types.Signer
 	mu          sync.RWMutex
@@ -410,6 +411,10 @@ func (pool *TxPool) Stop() {
 // starts sending event to the given channel.
 func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscription {
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
+}
+
+func (pool *TxPool) SubscribeNewQueuedTxsEvent(ch chan<- NewTxsEvent) event.Subscription {
+	return pool.scope.Track(pool.queuedTxFeed.Subscribe(ch))
 }
 
 // GasPrice returns the current gas price enforced by the transaction pool.
@@ -830,8 +835,10 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 
 	// Process all the new transaction and merge any errors into the original slice
 	pool.mu.Lock()
-	newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
+	newErrs, dirtyAddrs, valid := pool.addTxsLocked(news, local)
 	pool.mu.Unlock()
+
+	pool.queuedTxFeed.Send(NewTxsEvent{Txs: valid})
 
 	var nilSlot = 0
 	for _, err := range newErrs {
@@ -857,18 +864,22 @@ func (pool *TxPool) EnsurePromotionDone() {
 
 // addTxsLocked attempts to queue a batch of transactions if they are valid.
 // The transaction pool lock must be held.
-func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) ([]error, *accountSet) {
+func (pool *TxPool) addTxsLocked(txs []*types.Transaction, local bool) ([]error, *accountSet,[]*types.Transaction) {
 	dirty := newAccountSet(pool.signer)
 	errs := make([]error, len(txs))
+	valid := make([]*types.Transaction, len(txs))
 	for i, tx := range txs {
 		replaced, err := pool.add(tx, local)
 		errs[i] = err
 		if err == nil && !replaced {
 			dirty.addTx(tx)
 		}
+		if err == nil {
+			valid = append(valid, tx)
+		}
 	}
 	validTxMeter.Mark(int64(len(dirty.accounts)))
-	return errs, dirty
+	return errs, dirty,valid
 }
 
 // Status returns the status (unknown/pending/queued) of a batch of transactions
@@ -1119,7 +1130,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		for _, set := range events {
 			txs = append(txs, set.Flatten()...)
 		}
-		pool.txFeed.Send(NewTxsEvent{txs})
+		pool.txFeed.Send(NewTxsEvent{Txs: txs})
 	}
 }
 
