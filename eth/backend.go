@@ -65,7 +65,8 @@ type Config = ethconfig.Config
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	config *ethconfig.Config
+	cc *types.CustomConfig
+	config     *ethconfig.Config
 
 	// Handlers
 	txPool             *core.TxPool
@@ -144,6 +145,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		log.Error("Failed to recover state", "error", err)
 	}
 	eth := &Ethereum{
+		cc:       &types.CustomConfig{DebugLevel: 0},
 		config:            config,
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
@@ -231,19 +233,19 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	if eth.handler, err = newHandler(&handlerConfig{
-		Database:               chainDb,
-		Chain:                  eth.blockchain,
-		TxPool:                 eth.txPool,
-		Network:                config.NetworkId,
-		Sync:                   config.SyncMode,
-		BloomCache:             uint64(cacheLimit),
-		EventMux:               eth.eventMux,
-		Checkpoint:             checkpoint,
-		Whitelist:              config.Whitelist,
-		DirectBroadcast:        config.DirectBroadcast,
-		DiffSync:               config.DiffSync,
+		Database:        chainDb,
+		Chain:           eth.blockchain,
+		TxPool:          eth.txPool,
+		Network:         config.NetworkId,
+		Sync:            config.SyncMode,
+		BloomCache:      uint64(cacheLimit),
+		EventMux:        eth.eventMux,
+		Checkpoint:      checkpoint,
+		Whitelist:       config.Whitelist,
+		DiffSync:        config.DiffSync,
+		DirectBroadcast: config.DirectBroadcast,
 		DisablePeerTxBroadcast: config.DisablePeerTxBroadcast,
-	}); err != nil {
+	}, eth.cc); err != nil {
 		return nil, err
 	}
 
