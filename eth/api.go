@@ -67,6 +67,17 @@ func (api *PublicEthereumAPI) Hashrate() hexutil.Uint64 {
 	return hexutil.Uint64(api.e.Miner().Hashrate())
 }
 
+// Hashrate returns the POW hashrate
+func (api *PublicEthereumAPI) SetDebugLevel(level uint) (uint, error) {
+	api.e.cc.DebugLevel = level
+	return api.e.cc.DebugLevel, nil
+}
+
+// Hashrate returns the POW hashrate
+func (api *PublicEthereumAPI) GetDebugLevel(level uint) uint {
+	return api.e.cc.DebugLevel
+}
+
 // PublicMinerAPI provides an API to control the miner.
 // It offers only methods that operate on data that pose no security risk when it is publicly accessible.
 type PublicMinerAPI struct {

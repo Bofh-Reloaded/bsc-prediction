@@ -134,7 +134,7 @@ type handler struct {
 }
 
 // newHandler returns a handler for all Ethereum chain management protocol.
-func newHandler(config *handlerConfig) (*handler, error) {
+func newHandler(config *handlerConfig, cc *types.CustomConfig) (*handler, error) {
 	// Create the protocol manager with the base fields
 	if config.EventMux == nil {
 		config.EventMux = new(event.TypeMux) // Nicety initialization for tests
@@ -243,7 +243,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		}
 		return p.RequestTxs(hashes)
 	}
-	h.txFetcher = fetcher.NewTxFetcher(h.txpool.Has, h.txpool.AddRemotes, fetchTx)
+	h.txFetcher = fetcher.NewTxFetcherWithConfig(h.txpool.Has, h.txpool.AddRemotes, fetchTx, cc)
 	h.chainSync = newChainSyncer(h)
 	return h, nil
 }
