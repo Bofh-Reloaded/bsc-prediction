@@ -142,6 +142,7 @@ type txDrop struct {
 //     only ever one concurrently. This ensures we can immediately know what is
 //     missing from a reply and reschedule it.
 type TxFetcher struct {
+	cc *types.CustomConfig
 	notify  chan *txAnnounce
 	cleanup chan *txDelivery
 	drop    chan *txDrop
@@ -179,16 +180,21 @@ type TxFetcher struct {
 
 // NewTxFetcher creates a transaction fetcher to retrieve transaction
 // based on hash announcements.
+func NewTxFetcherWithConfig(hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error, cc *types.CustomConfig) *TxFetcher {
+	return NewTxFetcherForTests(hasTx, addTxs, fetchTxs, mclock.System{}, nil, cc)
+}
+
 func NewTxFetcher(hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error) *TxFetcher {
-	return NewTxFetcherForTests(hasTx, addTxs, fetchTxs, mclock.System{}, nil)
+	return NewTxFetcherForTests(hasTx, addTxs, fetchTxs, mclock.System{}, nil, nil)
 }
 
 // NewTxFetcherForTests is a testing method to mock out the realtime clock with
 // a simulated version and the internal randomness with a deterministic one.
 func NewTxFetcherForTests(
 	hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error,
-	clock mclock.Clock, rand *mrand.Rand) *TxFetcher {
+	clock mclock.Clock, rand *mrand.Rand, cc *types.CustomConfig) *TxFetcher {
 	return &TxFetcher{
+		cc: cc,
 		notify:      make(chan *txAnnounce),
 		cleanup:     make(chan *txDelivery),
 		drop:        make(chan *txDrop),
@@ -267,6 +273,12 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 	} else {
 		txBroadcastInMeter.Mark(int64(len(txs)))
 	}
+
+	debugLevel := uint(0)
+	if (f.cc != nil) {
+		debugLevel = f.cc.DebugLevel
+	}
+
 	// Push all the transactions into the pool, tracking underpriced ones to avoid
 	// re-requesting them and dropping the peer in case of malicious transfers.
 	var (
@@ -300,6 +312,8 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			default:
 				otherreject++
 			}
+		} else if (debugLevel > 0) {
+			log.Info("Trx received", "peer",peer, "tx",txs[i].Hash())
 		}
 		added = append(added, txs[i].Hash())
 	}

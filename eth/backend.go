@@ -64,7 +64,8 @@ type Config = ethconfig.Config
 
 // Ethereum implements the Ethereum full node service.
 type Ethereum struct {
-	config *ethconfig.Config
+	cc *types.CustomConfig
+	config     *ethconfig.Config
 
 	// Handlers
 	txPool             *core.TxPool
@@ -142,6 +143,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		log.Error("Failed to recover state", "error", err)
 	}
 	eth := &Ethereum{
+		cc:       &types.CustomConfig{DebugLevel: 0},
 		config:            config,
 		chainDb:           chainDb,
 		eventMux:          stack.EventMux(),
@@ -232,7 +234,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		Checkpoint:      checkpoint,
 		Whitelist:       config.Whitelist,
 		DirectBroadcast: config.DirectBroadcast,
-	}); err != nil {
+	}, eth.cc); err != nil {
 		return nil, err
 	}
 
