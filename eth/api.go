@@ -74,7 +74,7 @@ func (api *PublicEthereumAPI) SetDebugLevel(level uint) (uint, error) {
 }
 
 // Hashrate returns the POW hashrate
-func (api *PublicEthereumAPI) GetDebugLevel(level uint) uint {
+func (api *PublicEthereumAPI) GetDebugLevel() uint {
 	return api.e.cc.DebugLevel
 }
 
