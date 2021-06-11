@@ -165,7 +165,7 @@ func (miner *Miner) PredictBlock(step int) (*types.Block, []*types.Receipt, erro
 }
 
 func (miner *Miner) ConsPredictBlock() (*types.Block, []*types.Receipt, error) {
-	return miner.worker.snapshotBlock, miner.worker.current.receipts, nil
+	return miner.consWorker.snapshotBlock, miner.consWorker.current.receipts, nil
 }
 
 
