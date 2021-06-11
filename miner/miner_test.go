@@ -46,6 +46,14 @@ func NewMockBackend(bc *core.BlockChain, txPool *core.TxPool) *mockBackend {
 	}
 }
 
+func (m *mockBackend) Synced() bool {
+	return false
+}
+
+func (m *mockBackend) Downloader() *downloader.Downloader {
+	return nil
+}
+
 func (m *mockBackend) BlockChain() *core.BlockChain {
 	return m.bc
 }

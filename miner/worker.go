@@ -150,6 +150,7 @@ type PredictionData struct {
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
+	consPred bool
 	predData    *PredictionData
 	predConfig  *PredictionConfig
 	config      *Config
@@ -218,10 +219,11 @@ type worker struct {
 	resubmitHook func(time.Duration, time.Duration) // Method to call upon updating resubmitting interval.
 }
 
-func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
+func newWorker(consPred bool, pcfg * PredictionConfig, config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
 	worker := &worker{
+		consPred:			consPred,
 		predData:           &PredictionData{step: 0},
-		predConfig:         &PredictionConfig{P1Enabled: true, P2Enabled: true, MaxDelta: 0, P1Delay: 20, P2Delay: 1200, ConsPrediction: false, Debug: false, UseQueuedTrxs: false, Mode: 0},
+		predConfig:         pcfg,
 		config:             config,
 		chainConfig:        chainConfig,
 		engine:             engine,
@@ -415,17 +417,14 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		case head := <-w.chainHeadCh:
 			w.predData.step = 0
 			progress := w.eth.Downloader().Progress()
-			if progress.CurrentBlock < progress.HighestBlock || w.predConfig.Mode == 1 {
+			if progress.CurrentBlock < progress.HighestBlock || (w.consPred && w.predConfig.Mode == 1) {
 				continue
 			}
-			/*if !w.isRunning() {
-				continue
-			}*/
-			if !w.predConfig.P1Enabled && !w.predConfig.ConsPrediction {
+			if (!w.consPred && !w.predConfig.P1Enabled) || (w.consPred && !w.predConfig.ConsPrediction) {
 				continue
 			}
 
-			if !w.predConfig.ConsPrediction {
+			if !w.consPred {
 				w.predData.step = 1
 			}
 
@@ -541,7 +540,7 @@ func (w *worker) mainLoop() {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current mining block. These transactions will
 			// be automatically eliminated.
-			if !w.predConfig.UseQueuedTrxs {
+			if !w.predConfig.UseQueuedTrxs || !w.consPred {
 				continue
 			}
 			if !w.isRunning() && w.predConfig.ConsPrediction && ((w.current != nil && w.predData.step > 0) || w.predConfig.Mode == 1) {
@@ -589,7 +588,7 @@ func (w *worker) mainLoop() {
 			// Note all transactions received may not be continuous with transactions
 			// already included in the current mining block. These transactions will
 			// be automatically eliminated.
-			if w.predConfig.UseQueuedTrxs {
+			if w.predConfig.UseQueuedTrxs || !w.consPred {
 				continue
 			}
 			if !w.isRunning() && w.predConfig.ConsPrediction && ((w.current != nil && w.predData.step > 0) || w.predConfig.Mode == 1) {
@@ -1167,7 +1166,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		w.predData.step = 1
 	}
 
-	if w.predConfig.P2Enabled && w.predData.step == 1 && !w.predConfig.ConsPrediction {
+	if w.predConfig.P2Enabled && w.predData.step == 1 && !w.consPred {
 		if w.predConfig.P2Delay > 0 {
 			tx := w.predConfig.P2Delay*time.Millisecond - time.Duration(time.Now().Unix()-timestamp)*1000*time.Millisecond
 			t := time.Duration(minVal(int64(tx), int64(w.predConfig.P2Delay*time.Millisecond)))
