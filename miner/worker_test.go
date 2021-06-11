@@ -17,6 +17,7 @@
 package miner
 
 import (
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"math/big"
 	"math/rand"
 	"sync/atomic"
@@ -163,6 +164,12 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 
 func (b *testWorkerBackend) BlockChain() *core.BlockChain { return b.chain }
 func (b *testWorkerBackend) TxPool() *core.TxPool         { return b.txPool }
+func (b *testWorkerBackend) Synced() bool {
+	return false
+}
+func (b *testWorkerBackend) Downloader() *downloader.Downloader {
+	return nil
+}
 
 func (b *testWorkerBackend) newRandomUncle() *types.Block {
 	var parent *types.Block
@@ -193,7 +200,8 @@ func (b *testWorkerBackend) newRandomTx(creation bool) *types.Transaction {
 func newTestWorker(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, db ethdb.Database, blocks int) (*worker, *testWorkerBackend) {
 	backend := newTestWorkerBackend(t, chainConfig, engine, db, blocks)
 	backend.txPool.AddLocals(pendingTxs)
-	w := newWorker(testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
+	pcfg := &PredictionConfig{P1Enabled: false, P2Enabled: false, MaxDelta: 0, P1Delay: 10, P2Delay: 1200, ConsPrediction: false, Debug: false, UseQueuedTrxs: false, Mode: 0}
+	w := newWorker(false, pcfg, testConfig, chainConfig, engine, backend, new(event.TypeMux), nil, false)
 	w.setEtherbase(testBankAddress)
 	return w, backend
 }
