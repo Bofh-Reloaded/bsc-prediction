@@ -1154,7 +1154,7 @@ func (w *worker) commitNewWork(interrupt *int32, noempty bool, timestamp int64) 
 		commitTxsTimer.UpdateSince(start)
 		// log.Info("Gas pool", "height", header.Number.String(), "pool", w.current.gasPool.String())
 	}
-	if !w.predConfig.ConsPrediction {
+	if !w.consPred {
 		w.commit(uncles, w.fullTaskHook, true, tstart)
 	} else {
 		log.Info("Prepare T+1 for cons prediction","block",header.Number.Uint64())
