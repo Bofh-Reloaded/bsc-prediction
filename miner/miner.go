@@ -60,6 +60,7 @@ type Config struct {
 type Miner struct {
 	mux      *event.TypeMux
 	worker   *worker
+	consWorker *worker
 	coinbase common.Address
 	eth      Backend
 	engine   consensus.Engine
@@ -69,6 +70,8 @@ type Miner struct {
 }
 
 func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *event.TypeMux, engine consensus.Engine, isLocalBlock func(block *types.Block) bool) *Miner {
+	pcfg  := &PredictionConfig{P1Enabled: true, P2Enabled: true, MaxDelta: 0, P1Delay: 10, P2Delay: 1500, ConsPrediction: true, Debug: false, UseQueuedTrxs: true, Mode: 1}
+
 	miner := &Miner{
 		eth:     eth,
 		mux:     mux,
@@ -76,7 +79,8 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 		exitCh:  make(chan struct{}),
 		startCh: make(chan common.Address),
 		stopCh:  make(chan struct{}),
-		worker:  newWorker(config, chainConfig, engine, eth, mux, isLocalBlock, false),
+		worker:  newWorker(false, pcfg, config, chainConfig, engine, eth, mux, isLocalBlock, false),
+		consWorker:  newWorker(true, pcfg, config, chainConfig, engine, eth, mux, isLocalBlock, false),
 	}
 	go miner.update()
 
@@ -85,6 +89,7 @@ func New(eth Backend, config *Config, chainConfig *params.ChainConfig, mux *even
 
 func (miner *Miner) SetPredictionConfig(cfg *PredictionConfig) {
 	miner.worker.predConfig = cfg
+	miner.consWorker.predConfig = cfg
 }
 
 func (miner *Miner) GetPredictionConfig() *PredictionConfig {
