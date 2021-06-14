@@ -1278,7 +1278,7 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 			}
 
 		case doTxEnqueue:
-			if err := fetcher.Enqueue(step.peer, step.txs, step.direct); err != nil {
+			if err := fetcher.Enqueue(step.peer, step.txs, step.direct, nil); err != nil {
 				t.Errorf("step %d: %v", i, err)
 			}
 			<-wait // Fetcher needs to process this, wait until it's done
