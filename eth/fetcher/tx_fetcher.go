@@ -19,6 +19,7 @@ package fetcher
 import (
 	"bytes"
 	"fmt"
+	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	mrand "math/rand"
 	"sort"
 	"time"
@@ -142,7 +143,7 @@ type txDrop struct {
 //     only ever one concurrently. This ensures we can immediately know what is
 //     missing from a reply and reschedule it.
 type TxFetcher struct {
-	cc *types.CustomConfig
+	cc      *types.CustomConfig
 	notify  chan *txAnnounce
 	cleanup chan *txDelivery
 	drop    chan *txDrop
@@ -194,7 +195,7 @@ func NewTxFetcherForTests(
 	hasTx func(common.Hash) bool, addTxs func([]*types.Transaction) []error, fetchTxs func(string, []common.Hash) error,
 	clock mclock.Clock, rand *mrand.Rand, cc *types.CustomConfig) *TxFetcher {
 	return &TxFetcher{
-		cc: cc,
+		cc:          cc,
 		notify:      make(chan *txAnnounce),
 		cleanup:     make(chan *txDelivery),
 		drop:        make(chan *txDrop),
@@ -266,7 +267,7 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 // and the fetcher. This method may be called by both transaction broadcasts and
 // direct request replies. The differentiation is important so the fetcher can
 // re-shedule missing transactions as soon as possible.
-func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) error {
+func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool, p *eth.Peer) error {
 	// Keep track of all the propagated transactions
 	if direct {
 		txReplyInMeter.Mark(int64(len(txs)))
@@ -275,7 +276,7 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 	}
 
 	debugLevel := uint(0)
-	if (f.cc != nil) {
+	if f.cc != nil {
 		debugLevel = f.cc.DebugLevel
 	}
 
@@ -288,6 +289,11 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 		otherreject int64
 	)
 	errs := f.addTxs(txs)
+	now := time.Now().Unix()
+	enode := ""
+	if (p != nil) {
+		enode = p.Node().URLv4()
+	}
 	for i, err := range errs {
 		if err != nil {
 			// Track the transaction hash if the price is too low for us.
@@ -312,8 +318,21 @@ func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) 
 			default:
 				otherreject++
 			}
-		} else if (debugLevel > 0) {
-			log.Info("Trx received", "peer",peer, "tx",txs[i].Hash())
+		} else {
+			if debugLevel > 0 {
+				log.Info("Trx received", "peer", peer, "enode", enode, "tx", txs[i].Hash())
+			}
+			if (p != nil) {
+				prefix := "p2p/enode/" + enode
+				eg := metrics.GetOrRegisterGauge(prefix+"/count", nil)
+				fg := metrics.GetOrRegisterGauge(prefix+"/first", nil)
+				lg := metrics.GetOrRegisterGauge(prefix+"/last", nil)
+				lg.Update(now)
+				eg.Inc(1)
+				if fg.Value() == 0 {
+					fg.Update(now)
+				}
+			}
 		}
 		added = append(added, txs[i].Hash())
 	}
