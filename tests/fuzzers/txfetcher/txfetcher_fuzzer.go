@@ -169,7 +169,7 @@ func Fuzz(input []byte) int {
 			if verbose {
 				fmt.Println("Enqueue", peer, deliverIdxs, direct)
 			}
-			if err := f.Enqueue(peer, deliveries, direct); err != nil {
+			if err := f.Enqueue(peer, deliveries, direct, nil); err != nil {
 				panic(err)
 			}
 
