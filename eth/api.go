@@ -674,6 +674,9 @@ func (s *PublicEthereumAPI) ConsPredictLogs(ctx context.Context, blockNumber uin
 					cmp["transactionIndex"] = hexutil.Uint(idx)
 					cmp["logIndex"] = hexutil.Uint(log.Index)
 					cmp["gasPrice"] = hexutil.Big(*receipt.GasPrice)
+					cmp["topic0"] = log.Topics[0]
+					cmp["topic1"] = log.Topics[1]
+					cmp["topic2"] = log.Topics[2]
 					logs = append(logs, cmp)
 				}
 			}
