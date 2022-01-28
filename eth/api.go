@@ -645,7 +645,7 @@ func (s *PublicEthereumAPI) ConsPredictBlock(ctx context.Context) (interface{}, 
 	return nil, err
 }
 
-func (s *PublicEthereumAPI) ConsPredictLogs(ctx context.Context, blockNumber uint64, logIndex uint, hash common.Hash) (interface{}, error) {
+func (s *PublicEthereumAPI) ConsPredictLogs(ctx context.Context, blockNumber uint64, logIndex uint, swap_hash common.Hash, sync_hash common.Hash) (interface{}, error) {
 	block, receipts, err := s.e.Miner().ConsPredictBlock()
 	if block != nil && err == nil {
 		number := block.NumberU64()
@@ -666,7 +666,8 @@ func (s *PublicEthereumAPI) ConsPredictLogs(ctx context.Context, blockNumber uin
 				continue
 			}
 			for _, log := range receipt.Logs {
-				if (log.Topics[0] == hash && !log.Removed) {
+				if ((log.Topics[0] == swap_hash || log.Topics[0] == sync_hash) && !log.Removed) {
+					// We found a swap event
 					cmp := make(map[string]interface{}, 5)
 					cmp["address"] = log.Address
 					cmp["tx"] = log.TxHash
@@ -675,8 +676,10 @@ func (s *PublicEthereumAPI) ConsPredictLogs(ctx context.Context, blockNumber uin
 					cmp["logIndex"] = hexutil.Uint(log.Index)
 					cmp["gasPrice"] = hexutil.Big(*receipt.GasPrice)
 					cmp["topic0"] = log.Topics[0]
-					cmp["topic1"] = log.Topics[1]
-					cmp["topic2"] = log.Topics[2]
+					if len(log.Topics) >= 3 {
+						cmp["topic1"] = log.Topics[1]
+						cmp["topic2"] = log.Topics[2]
+					}
 					logs = append(logs, cmp)
 				}
 			}
